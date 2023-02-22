@@ -118,7 +118,12 @@ async function trade(
 }
 
 async function amountToBuy(market, round, skewImpactLimit) {
+  console.log("Building quote. Getting min trade amount...");
+
   const minTradeAmount = (await VaultContract.minTradeAmount()) / 1e18;
+  console.log(
+    `Min trade amount: ${minTradeAmount}. Calculating max trade amount...`
+  );
   let amount = 0,
     finalAmount = 0,
     quote = 0,
@@ -130,39 +135,69 @@ async function amountToBuy(market, round, skewImpactLimit) {
       market.address,
       market.position
     )) / 1e18;
+  console.log(`Max amount: ${maxAmount}. Calculating available allocation...`);
 
   const availableAllocationPerAsset =
     (await VaultContract.getAvailableAllocationForMarket(market.address)) /
     1e18;
+
+  console.log(`Available allocation: ${availableAllocationPerAsset}`);
+
   if (maxAmount < minTradeAmount) {
+    console.log("Max amount is less than min trade amount - skipping market");
     return { amount: 0, quote: 0, position: market.position };
   }
-  console.log("Processing market", market.address);
+  console.log("Processing bid amount for: ", market.address);
 
-  while (amount < maxAmount) {
-    finalAmount = amount;
-    amount += step;
+  // while (amount < maxAmount) {
+  //   finalAmount = amount;
+  //   amount += step;
 
-    let skewImpact =
-      (await thalesAMMContract.buyPriceImpact(
-        market.address,
-        market.position,
-        w3utils.toWei(amount.toString())
-      )) / 1e18;
+  //   console.log(
+  //     `Determining Skew Impact for bid of: ${amount}. Address: ${
+  //       market.address
+  //     } Position: ${market.position} Amount: ${w3utils.toWei(
+  //       amount.toString()
+  //     )}`
+  //   );
+  let skewImpact = await buyPriceImpact(
+    market.address,
+    market.position,
+    w3utils.toWei(amount.toString())
+  );
 
-    if (skewImpact >= skewImpactLimit) break;
+  //   console.log(
+  //     `comparing skew impact ${skewImpact} with limit ${skewImpactLimit}`
+  //   );
 
-    finalQuote = quote;
-    quote =
-      (await thalesAMMContract.buyFromAmmQuote(
-        market.address,
-        market.position,
-        w3utils.toWei(amount.toString())
-      )) / 1e18;
+  //   if (skewImpact >= skewImpactLimit) {
+  //     console.log(
+  //       `The calculated skew impact (${skewImpact}) is bigger than the limit of ${skewImpactLimit}`
+  //     );
+  //     break;
+  //   }
 
-    if (quote >= availableAllocationPerAsset) break;
-  }
+  //   finalQuote = quote;
+  //   quote =
+  //     (await thalesAMMContract.buyFromAmmQuote(
+  //       market.address,
+  //       market.position,
+  //       w3utils.toWei(amount.toString())
+  //     )) / 1e18;
 
+  //   if (quote >= availableAllocationPerAsset) {
+  //     console.log(
+  //       `The calculated quote (${quote}) is bigger than the available allocation per asset ${availableAllocationPerAsset}`
+  //     );
+  //     break;
+  //   }
+  // }
+
+  console.log(
+    `Final amount: ${finalAmount}, final quote: ${finalQuote}, position: ${
+      market.position === 1 ? "DOWN" : "UP"
+    }}`
+  );
   return { amount: finalAmount, quote: finalQuote, position: market.position };
 }
 
@@ -270,54 +305,92 @@ async function testTrade(
     skewImpactLimit
   );
 
-  // for (const key in tradingMarkets) {
-  //   let market = tradingMarkets[key];
+  for (const key in tradingMarkets) {
+    let market = tradingMarkets[key];
+    console.log(
+      `Processing ${market.currencyKey} market ${market.address} ...`
+    );
 
-  //   let tradedInRoundAlready = await VaultContract.isTradingMarketInARound(
-  //     round,
-  //     market.address
-  //   );
-  //   if (tradedInRoundAlready) {
-  //     let tradedBeforePosition =
-  //       await VaultContract.tradingMarketPositionPerRound(
-  //         round,
-  //         market.address
-  //       );
-  //     if (tradedBeforePosition != market.position) {
-  //       continue;
-  //     }
-  //   }
+    let tradedInRoundAlready = await VaultContract.isTradingMarketInARound(
+      round,
+      market.address
+    );
 
-  //   let result = await amountToBuy(market, round, skewImpactLimit);
+    console.log(`Acquired by vault within round: ${tradedInRoundAlready}`);
 
-  //   console.log("Trying to buy amount", result.amount);
-  //   console.log("Quote", result.quote);
+    if (tradedInRoundAlready) {
+      console.log("Market already traded in round. ");
+      let tradedBeforePosition =
+        await VaultContract.tradingMarketPositionPerRound(
+          round,
+          market.address
+        );
+      console.log(
+        `Position: ${
+          tradedBeforePosition > 0 ? "DOWN" : "UP"
+        } (${tradedBeforePosition})`
+      );
+      if (tradedBeforePosition != market.position) {
+        console.log(
+          "Market already traded in round, but with different position (0=UP, 1=DOWN, 2=DRAW). Skipping ..."
+        );
+        continue;
+      }
+    }
 
-  //   if (result.amount > 0) {
-  //     try {
-  //       let tx = await VaultContract.trade(
-  //         market.address,
-  //         w3utils.toWei(result.amount.toString()),
-  //         result.position,
-  //         {
-  //           gasLimit: 10000000,
-  //           gasPrice: gasp.add(gasp.div(5)),
-  //         }
-  //       );
-  //       let receipt = await tx.wait();
-  //       let transactionHash = receipt.transactionHash;
-  //       console.log("Transaction hash", transactionHash);
-  //       // await sendTradeSuccessMessage(market, result, transactionHash);
-  //       console.log("Trade made");
-  //     } catch (e) {
-  //       let errorBody = JSON.parse(e.error.error.body);
-  //       console.log("Trade failed", errorBody);
-  //       // await sendTradeErrorMessage(market.address, errorBody.error.message);
-  //     }
-  //   }
-  // }
+    let result = await amountToBuy(market, round, skewImpactLimit);
+
+    console.log("Trying to buy amount", result.amount);
+    console.log("Quote", result.quote);
+
+    console.log("Trying to trade...");
+    // if (result.amount > 0) {
+    //   try {
+    //     let tx = await VaultContract.trade(
+    //       market.address,
+    //       w3utils.toWei(result.amount.toString()),
+    //       result.position,
+    //       {
+    //         gasLimit: 10000000,
+    //         gasPrice: gasp.add(gasp.div(5)),
+    //       }
+    //     );
+    //     let receipt = await tx.wait();
+    //     let transactionHash = receipt.transactionHash;
+    //     console.log("Transaction hash", transactionHash);
+    //     // await sendTradeSuccessMessage(market, result, transactionHash);
+    //     console.log("Trade made");
+    //   } catch (e) {
+    //     let errorBody = JSON.parse(e.error.error.body);
+    //     console.log("Trade failed", errorBody);
+    //     // await sendTradeErrorMessage(market.address, errorBody.error.message);
+    //   }
+    // }
+  }
 
   console.log("Markets to trade", tradingMarkets);
+}
+
+async function buyPriceImpact(address, position, amount) {
+  let skewImpact =
+    (await thalesAMMContract.buyPriceImpact(
+      address,
+      position,
+      w3utils.toWei(amount.toString())
+    )) / 1e18;
+  return skewImpact;
+}
+
+function binarySearch(min, max, func) {
+  let mid = (min + max) / 2;
+  let result = func(mid);
+  if (result == 0) {
+    return mid;
+  } else if (result > 0) {
+    return binarySearch(min, mid, func);
+  } else {
+    return binarySearch(mid, max, func);
+  }
 }
 
 module.exports = {

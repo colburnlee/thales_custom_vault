@@ -71,8 +71,8 @@ async function processMarkets(
       try {
         let buyPriceImpactUP = marketPriceImpact.upPriceImpact / 1e18;
         let buyPriceImpactDOWN = marketPriceImpact.downPriceImpact / 1e18;
-        console.log("buyPriceImpactUP is " + buyPriceImpactUP);
-        console.log("buyPriceImpactDOWN is " + buyPriceImpactDOWN);
+        console.log("buyPriceImpactUP: " + buyPriceImpactUP);
+        console.log("buyPriceImpactDOWN: " + buyPriceImpactDOWN);
         if (
           buyPriceImpactUP >= skewImpactLimit &&
           buyPriceImpactDOWN >= skewImpactLimit
