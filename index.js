@@ -6,7 +6,7 @@ async function doLoop() {
   while (true) {
     try {
       await doMain();
-      await delay(1000 * 60 * process.env.DELAY_IN_MINUTES);
+      await delay(1000 * 60 * +process.env.DELAY_IN_MINUTES);
     } catch (e) {
       console.log(e);
     }
@@ -15,7 +15,7 @@ async function doLoop() {
 
 async function doMain() {
   console.log(
-      "==================== START PROCESSING VAULT ===================="
+    "==================== START PROCESSING VAULT ===================="
   );
 
   await vault.processVault();

@@ -27,8 +27,11 @@ const VaultContract = new ethers.Contract(
   wallet
 );
 
+// Test trade function ON
 async function processVault() {
+  console.log("Processing vault. Getting Gas Price...");
   let gasp = await constants.etherprovider.getGasPrice();
+  console.log("Gas Price: " + gasp.toString());
 
   const round = await VaultContract.round();
   const roundEndTime = (await VaultContract.getCurrentRoundEnd()).toString();
@@ -39,7 +42,7 @@ async function processVault() {
 
   const skewImpactLimit = (await VaultContract.skewImpactLimit()) / 1e18;
 
-  await trade(
+  await testTrade(
     priceLowerLimit,
     priceUpperLimit,
     skewImpactLimit,
@@ -47,31 +50,6 @@ async function processVault() {
     closingDate,
     gasp
   );
-
-  await closeRound(closingDate);
-}
-
-async function closeRound(roundEndTime) {
-  console.log("Trying to close the round");
-  try {
-    let now = new Date();
-
-    if (now.getTime() > roundEndTime) {
-      let canCloseRound = await VaultContract.canCloseCurrentRound();
-      if (canCloseRound) {
-        let tx = await VaultContract.closeRound();
-        await tx.wait().then((e) => {
-          console.log("Round closed");
-        });
-      }
-    } else {
-      console.log("Cannot close round yet");
-    }
-  } catch (e) {
-    let errorBody = JSON.parse(e.error.error.body);
-    console.log("Failed to close the round", errorBody.error.message);
-    await sendRoundErrorMessage(errorBody.error.message);
-  }
 }
 
 async function trade(
@@ -125,12 +103,13 @@ async function trade(
         );
         let receipt = await tx.wait();
         let transactionHash = receipt.transactionHash;
+        console.log("Transaction hash", transactionHash);
         // await sendTradeSuccessMessage(market, result, transactionHash);
         console.log("Trade made");
       } catch (e) {
         let errorBody = JSON.parse(e.error.error.body);
         console.log("Trade failed", errorBody);
-        await sendTradeErrorMessage(market.address, errorBody.error.message);
+        // await sendTradeErrorMessage(market.address, errorBody.error.message);
       }
     }
   }
@@ -274,6 +253,71 @@ function delay(time) {
   return new Promise(function (resolve) {
     setTimeout(resolve, time);
   });
+}
+
+async function testTrade(
+  priceLowerLimit,
+  priceUpperLimit,
+  skewImpactLimit,
+  round,
+  roundEndTime,
+  gasp
+) {
+  let tradingMarkets = await marketschecker.processMarkets(
+    priceLowerLimit,
+    priceUpperLimit,
+    roundEndTime,
+    skewImpactLimit
+  );
+
+  // for (const key in tradingMarkets) {
+  //   let market = tradingMarkets[key];
+
+  //   let tradedInRoundAlready = await VaultContract.isTradingMarketInARound(
+  //     round,
+  //     market.address
+  //   );
+  //   if (tradedInRoundAlready) {
+  //     let tradedBeforePosition =
+  //       await VaultContract.tradingMarketPositionPerRound(
+  //         round,
+  //         market.address
+  //       );
+  //     if (tradedBeforePosition != market.position) {
+  //       continue;
+  //     }
+  //   }
+
+  //   let result = await amountToBuy(market, round, skewImpactLimit);
+
+  //   console.log("Trying to buy amount", result.amount);
+  //   console.log("Quote", result.quote);
+
+  //   if (result.amount > 0) {
+  //     try {
+  //       let tx = await VaultContract.trade(
+  //         market.address,
+  //         w3utils.toWei(result.amount.toString()),
+  //         result.position,
+  //         {
+  //           gasLimit: 10000000,
+  //           gasPrice: gasp.add(gasp.div(5)),
+  //         }
+  //       );
+  //       let receipt = await tx.wait();
+  //       let transactionHash = receipt.transactionHash;
+  //       console.log("Transaction hash", transactionHash);
+  //       // await sendTradeSuccessMessage(market, result, transactionHash);
+  //       console.log("Trade made");
+  //     } catch (e) {
+  //       let errorBody = JSON.parse(e.error.error.body);
+  //       console.log("Trade failed", errorBody);
+  //       // await sendTradeErrorMessage(market.address, errorBody.error.message);
+  //     }
+  //   }
+  // }
+
+  console.log("Markets to trade", tradingMarkets);
 }
 
 module.exports = {
