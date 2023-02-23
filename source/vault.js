@@ -29,18 +29,17 @@ const VaultContract = new ethers.Contract(
 
 // Test trade function ON
 async function processVault() {
-  console.log("Processing vault. Getting Gas Price...");
+  console.log("Processing vault...");
   let gasp = await constants.etherprovider.getGasPrice();
-  console.log("Gas Price: " + gasp.toString());
-
   const round = await VaultContract.round();
   const roundEndTime = (await VaultContract.getCurrentRoundEnd()).toString();
   let closingDate = new Date(roundEndTime * 1000.0).getTime();
-
   const priceUpperLimit = (await VaultContract.priceUpperLimit()) / 1e18;
   const priceLowerLimit = (await VaultContract.priceLowerLimit()) / 1e18;
-
   const skewImpactLimit = (await VaultContract.skewImpactLimit()) / 1e18;
+  console.log(
+    `Vault Information... Round: ${round}, Closing Date: ${closingDate}, Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit} `
+  );
 
   await testTrade(
     priceLowerLimit,
@@ -118,12 +117,7 @@ async function trade(
 }
 
 async function amountToBuy(market, round, skewImpactLimit) {
-  console.log("Building quote. Getting min trade amount...");
-
   const minTradeAmount = (await VaultContract.minTradeAmount()) / 1e18;
-  console.log(
-    `Min trade amount: ${minTradeAmount}. Calculating max trade amount...`
-  );
   let amount = 0,
     finalAmount = 0,
     quote = 0,
@@ -135,69 +129,39 @@ async function amountToBuy(market, round, skewImpactLimit) {
       market.address,
       market.position
     )) / 1e18;
-  console.log(`Max amount: ${maxAmount}. Calculating available allocation...`);
 
   const availableAllocationPerAsset =
     (await VaultContract.getAvailableAllocationForMarket(market.address)) /
     1e18;
-
-  console.log(`Available allocation: ${availableAllocationPerAsset}`);
-
   if (maxAmount < minTradeAmount) {
-    console.log("Max amount is less than min trade amount - skipping market");
     return { amount: 0, quote: 0, position: market.position };
   }
-  console.log("Processing bid amount for: ", market.address);
+  console.log("Processing market", market.address);
 
-  // while (amount < maxAmount) {
-  //   finalAmount = amount;
-  //   amount += step;
+  while (amount < maxAmount) {
+    finalAmount = amount;
+    amount += step;
 
-  //   console.log(
-  //     `Determining Skew Impact for bid of: ${amount}. Address: ${
-  //       market.address
-  //     } Position: ${market.position} Amount: ${w3utils.toWei(
-  //       amount.toString()
-  //     )}`
-  //   );
-  let skewImpact = await buyPriceImpact(
-    market.address,
-    market.position,
-    w3utils.toWei(amount.toString())
-  );
+    let skewImpact =
+      (await thalesAMMContract.buyPriceImpact(
+        market.address,
+        market.position,
+        w3utils.toWei(amount.toString())
+      )) / 1e18;
 
-  //   console.log(
-  //     `comparing skew impact ${skewImpact} with limit ${skewImpactLimit}`
-  //   );
+    if (skewImpact >= skewImpactLimit) break;
 
-  //   if (skewImpact >= skewImpactLimit) {
-  //     console.log(
-  //       `The calculated skew impact (${skewImpact}) is bigger than the limit of ${skewImpactLimit}`
-  //     );
-  //     break;
-  //   }
+    finalQuote = quote;
+    quote =
+      (await thalesAMMContract.buyFromAmmQuote(
+        market.address,
+        market.position,
+        w3utils.toWei(amount.toString())
+      )) / 1e18;
 
-  //   finalQuote = quote;
-  //   quote =
-  //     (await thalesAMMContract.buyFromAmmQuote(
-  //       market.address,
-  //       market.position,
-  //       w3utils.toWei(amount.toString())
-  //     )) / 1e18;
-
-  //   if (quote >= availableAllocationPerAsset) {
-  //     console.log(
-  //       `The calculated quote (${quote}) is bigger than the available allocation per asset ${availableAllocationPerAsset}`
-  //     );
-  //     break;
-  //   }
-  // }
-
-  console.log(
-    `Final amount: ${finalAmount}, final quote: ${finalQuote}, position: ${
-      market.position === 1 ? "DOWN" : "UP"
-    }}`
-  );
+    if (quote >= availableAllocationPerAsset) break;
+  }
+  console.log(`Amount: ${finalAmount} Quote: ${finalQuote}`);
   return { amount: finalAmount, quote: finalQuote, position: market.position };
 }
 
@@ -311,15 +275,16 @@ async function testTrade(
       `Processing ${market.currencyKey} market ${market.address} ...`
     );
 
+    // Check if this market has already been traded in this round. Returns true or false.
     let tradedInRoundAlready = await VaultContract.isTradingMarketInARound(
       round,
       market.address
     );
 
-    console.log(`Acquired by vault within round: ${tradedInRoundAlready}`);
-
     if (tradedInRoundAlready) {
       console.log("Market already traded in round. ");
+
+      // Check if this market has already been traded in this round. Returns a 0 for UP, 1 for DOWN
       let tradedBeforePosition =
         await VaultContract.tradingMarketPositionPerRound(
           round,
@@ -332,18 +297,29 @@ async function testTrade(
       );
       if (tradedBeforePosition != market.position) {
         console.log(
-          "Market already traded in round, but with different position (0=UP, 1=DOWN, 2=DRAW). Skipping ..."
+          "Market already traded in round, but with different position. Skipping ..."
         );
         continue;
       }
+    } else {
+      console.log("Market not traded in round. ");
     }
 
+    // Evaluate the amount to buy according to Skew Impact. Returns an object with amount, quote and position.
     let result = await amountToBuy(market, round, skewImpactLimit);
 
     console.log("Trying to buy amount", result.amount);
     console.log("Quote", result.quote);
 
-    console.log("Trying to trade...");
+    if (result.amount > 0) {
+      console.log(
+        `Executing order to buy ${result.amount} ${
+          market.position > 0 ? "DOWN" : "UP"
+        }s ($${result.quote.toFixed(2)}) of ${market.currencyKey} at ${
+          market.address
+        } ...`
+      );
+    }
     // if (result.amount > 0) {
     //   try {
     //     let tx = await VaultContract.trade(
@@ -367,18 +343,15 @@ async function testTrade(
     //   }
     // }
   }
-
-  console.log("Markets to trade", tradingMarkets);
 }
 
 async function buyPriceImpact(address, position, amount) {
-  let skewImpact =
-    (await thalesAMMContract.buyPriceImpact(
-      address,
-      position,
-      w3utils.toWei(amount.toString())
-    )) / 1e18;
-  return skewImpact;
+  let skewImpact = await thalesAMMContract.buyPriceImpact(
+    address,
+    position,
+    w3utils.toWei(amount.toString())
+  );
+  return skewImpact / 1e18;
 }
 
 function binarySearch(min, max, func) {
@@ -386,10 +359,10 @@ function binarySearch(min, max, func) {
   let result = func(mid);
   if (result == 0) {
     return mid;
-  } else if (result > 0) {
-    return binarySearch(min, mid, func);
-  } else {
+  } else if (result < 0) {
     return binarySearch(mid, max, func);
+  } else {
+    return binarySearch(min, mid, func);
   }
 }
 

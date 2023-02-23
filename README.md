@@ -41,3 +41,20 @@ DELAY_IN_MINUTES="1"
 ```
 
 ** NOTE: this properties are set is for kovan network please check next variables for MAIN **
+
+## Vault Variables
+
+```
+---------------------------
+Utilization rate: What is the maximum percentage of the total deposited that can be utilized on a trading strategy at any given moment
+Price lower limit: The automated strategy will only buy positions at this price or higher
+Price upper limit: The automated strategy will only buy positions up to this price.
+Max Skew impact: Represents how much skew impact is the current strategy willing to accept when executing a trade. If set to 0, means that the strategy won’t execute any trade that has any amount of skew.
+Max allocation on a single market: The maximum percentage of the total funds deposited to be used for a single position
+Max total deposit: Maximum amount of collateral (from all the users or depositors) to be taken by the vault
+Max users in the vault: Maximum amount of users (or addresses) in the vault.
+Minimum amount on a single trade: Value in dollars defining the minimal size possible for a trade executed by the vault
+Minimum deposit: Minimal amount (in sUSD) for a user to deposit into the vault
+Round duration: How many days does a round last, initially the 3 vaults are set to a 1-week round duration
+---------------------------
+```
