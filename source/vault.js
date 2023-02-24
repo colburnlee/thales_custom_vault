@@ -138,7 +138,7 @@ async function amountToBuy(market, round, skewImpactLimit) {
   //   1e18;
 
   // TEST VARIABLE
-  const availableAllocationPerAsset = 50;
+  const availableAllocationPerAsset = 10;
 
   console.log(
     `Available allocation for this (${
@@ -171,7 +171,7 @@ async function amountToBuy(market, round, skewImpactLimit) {
       } Skew Impact Limit: ${skewImpactLimit}`
     );
     if (skewImpact <= skewImpactLimit) break;
-    amount -= step;
+    amount = Math.floor(amount * 0.95);
   }
 
   // Get the quote for the amount of tokens to buy. If the quote is over the max allocation, then reduce the amount to buy
@@ -192,9 +192,11 @@ async function amountToBuy(market, round, skewImpactLimit) {
     console.log(
       `Quoted price ($${quote.toFixed(
         2
-      )}) is too high. Reducing quantity from ${amount} to ${amount - 5}`
+      )}) is too high. Reducing quantity from ${amount} to ${Math.floor(
+        amount * 0.99
+      )}`
     );
-    amount -= 5;
+    amount = Math.floor(amount * 0.99);
     quote =
       (await thalesAMMContract.buyFromAmmQuote(
         market.address,
