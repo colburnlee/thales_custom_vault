@@ -52,7 +52,7 @@ async function processMarkets(
   let i = 0;
 
   for (const market of positionalMarkets) {
-    // console.log("Processing " + i + " market " + market.address);
+    console.log("Processing " + i + " market " + market.address);
     i++;
 
     const marketPrices = pricesForAllActiveMarkets.find(
@@ -67,12 +67,12 @@ async function processMarkets(
       marketPrices &&
       marketPriceImpact
     ) {
-      // console.log("eligible");
+      console.log("eligible");
       try {
         let buyPriceImpactUP = marketPriceImpact.upPriceImpact / 1e18;
         let buyPriceImpactDOWN = marketPriceImpact.downPriceImpact / 1e18;
-        // console.log("buyPriceImpactUP: " + buyPriceImpactUP);
-        // console.log("buyPriceImpactDOWN: " + buyPriceImpactDOWN);
+        console.log("buyPriceImpactUP: " + buyPriceImpactUP);
+        console.log("buyPriceImpactDOWN: " + buyPriceImpactDOWN);
         if (
           buyPriceImpactUP >= skewImpactLimit &&
           buyPriceImpactDOWN >= skewImpactLimit
@@ -94,7 +94,7 @@ async function processMarkets(
             currencyKey: market.currencyKey,
             price: priceUP,
           });
-          // console.log(market.address, "PriceUP", priceUP);
+          console.log(market.address, "PriceUP", priceUP);
         } else if (
           priceDOWN > priceLowerLimit &&
           priceDOWN < priceUpperLimit &&
@@ -106,7 +106,7 @@ async function processMarkets(
             currencyKey: market.currencyKey,
             price: priceDOWN,
           });
-          // console.log(market.address, "PriceDOWN", priceDOWN);
+          console.log(market.address, "PriceDOWN", priceDOWN);
         } else {
           continue;
         }
@@ -114,9 +114,8 @@ async function processMarkets(
         console.log(e);
       }
     }
-    console.log(`Processed ${i} markets`);
   }
-
+  console.log(`Processed ${i} markets`);
   console.log(
     "--------------------Finished processing markets-------------------"
   );

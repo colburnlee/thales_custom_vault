@@ -9,8 +9,6 @@ const Vault = require("../contracts/Vault.js");
 const ThalesAMM = require("../contracts/ThalesAMM.js");
 const marketschecker = require("./marketschecker.js");
 
-const { performance } = require("perf_hooks");
-
 // const Discord = require("discord.js");
 // const vaultBot = new Discord.Client();
 // vaultBot.login(process.env.VAULT_BOT_TOKEN);
@@ -27,6 +25,8 @@ const VaultContract = new ethers.Contract(
   wallet
 );
 
+// TODO: Replace VaultContract variables where modification is needed ( isTradingMarketInARound, tradingMarketPositionPerRound, trade )
+
 // Test trade function ON
 async function processVault() {
   console.log("Processing vault...");
@@ -40,7 +40,6 @@ async function processVault() {
   console.log(
     `Vault Information... Round: ${round}, Closing Date: ${closingDate}, Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit} `
   );
-
   await testTrade(
     priceLowerLimit,
     priceUpperLimit,
@@ -117,51 +116,109 @@ async function trade(
 }
 
 async function amountToBuy(market, round, skewImpactLimit) {
+  // Get the minimum trade amount (in UPs or DOWNs - usually 3)
   const minTradeAmount = (await VaultContract.minTradeAmount()) / 1e18;
-  let amount = 0,
-    finalAmount = 0,
+  let finalAmount = 0,
     quote = 0,
-    finalQuote = 0,
-    step = minTradeAmount;
+    step = 10;
+  // step = minTradeAmount;
+  // finalQuote = 0
 
-  const maxAmount =
+  // Lists the maximum amount of tokens that can be bought from the AMM in a position direction (0=UP, 1=DOWN)
+  const maxAmmAmount =
     (await thalesAMMContract.availableToBuyFromAMM(
       market.address,
       market.position
     )) / 1e18;
 
-  const availableAllocationPerAsset =
-    (await VaultContract.getAvailableAllocationForMarket(market.address)) /
-    1e18;
-  if (maxAmount < minTradeAmount) {
+  // TODO: Recreate this for a personal vault
+  // Calls the Vault contract to get the available allocation for the market. This is calculated from the Vault: allocationLimitsPerMarketPerRound * tradingAllocation
+  // const availableAllocationPerAsset =
+  //   (await VaultContract.getAvailableAllocationForMarket(market.address)) /
+  //   1e18;
+
+  // TEST VARIABLE
+  const availableAllocationPerAsset = 50;
+
+  console.log(
+    `Available allocation for this (${
+      market.currencyKey
+    }) market: $${availableAllocationPerAsset.toFixed(2)}`
+  );
+  const maxAllocationAmount = availableAllocationPerAsset / market.price; // this is a cieling value, as it would a trade with zero slippage
+  let amount = Math.round(maxAllocationAmount);
+  if (
+    maxAmmAmount < minTradeAmount ||
+    amount < minTradeAmount ||
+    amount == 0 ||
+    maxAmmAmount == 0
+  ) {
+    console.log("Not enough liquidity to trade this market");
     return { amount: 0, quote: 0, position: market.position };
   }
-  console.log("Processing market", market.address);
-
-  while (amount < maxAmount) {
-    finalAmount = amount;
-    amount += step;
-
+  while (amount < maxAmmAmount) {
     let skewImpact =
       (await thalesAMMContract.buyPriceImpact(
         market.address,
         market.position,
         w3utils.toWei(amount.toString())
       )) / 1e18;
+    console.log(
+      `Simulated puchase impact for ${amount} ${market.currencyKey} ${
+        market.position > 0 ? "DOWN" : "UP"
+      }s = Skew Impact: ${
+        skewImpact <= 0 ? skewImpact.toFixed(1) : skewImpact.toFixed(10)
+      } Skew Impact Limit: ${skewImpactLimit}`
+    );
+    if (skewImpact <= skewImpactLimit) break;
+    amount -= step;
+  }
 
-    if (skewImpact >= skewImpactLimit) break;
-
-    finalQuote = quote;
+  // Get the quote for the amount of tokens to buy. If the quote is over the max allocation, then reduce the amount to buy
+  quote =
+    (await thalesAMMContract.buyFromAmmQuote(
+      market.address,
+      market.position,
+      w3utils.toWei(amount.toString())
+    )) / 1e18;
+  console.log(
+    `${amount} ${market.currencyKey} ${
+      market.position > 0 ? "DOWN" : "UP"
+    } Quote: Price: $${quote.toFixed(
+      2
+    )} Max Allocation: $${availableAllocationPerAsset.toFixed(2)}`
+  );
+  while (quote > availableAllocationPerAsset) {
+    console.log(
+      `Quoted price ($${quote.toFixed(
+        2
+      )}) is too high. Reducing quantity from ${amount} to ${amount - 5}`
+    );
+    amount -= 5;
     quote =
       (await thalesAMMContract.buyFromAmmQuote(
         market.address,
         market.position,
         w3utils.toWei(amount.toString())
       )) / 1e18;
-
-    if (quote >= availableAllocationPerAsset) break;
   }
-  console.log(`Amount: ${finalAmount} Quote: ${finalQuote}`);
+  finalAmount = amount.toFixed(0);
+
+  finalQuote =
+    (await thalesAMMContract.buyFromAmmQuote(
+      market.address,
+      market.position,
+      w3utils.toWei(finalAmount.toString())
+    )) / 1e18;
+  console.log(
+    `Quoted Price: $${finalQuote.toFixed(
+      2
+    )} Max Allocation: $${availableAllocationPerAsset.toFixed(
+      2
+    )}. Amount to buy: ${finalAmount}`
+  );
+
+  // console.log(`Amount: ${finalAmount} Quote: ${finalQuote}`);
   return { amount: finalAmount, quote: finalQuote, position: market.position };
 }
 
@@ -272,7 +329,9 @@ async function testTrade(
   for (const key in tradingMarkets) {
     let market = tradingMarkets[key];
     console.log(
-      `Processing ${market.currencyKey} market ${market.address} ...`
+      `--------------------Processing ${market.currencyKey} ${
+        market.position > 0 ? "DOWN" : "UP"
+      } at ${market.address}-------------------`
     );
 
     // Check if this market has already been traded in this round. Returns true or false.
@@ -297,19 +356,19 @@ async function testTrade(
       );
       if (tradedBeforePosition != market.position) {
         console.log(
-          "Market already traded in round, but with different position. Skipping ..."
+          "Market already traded in round, but with different position. Skipping"
         );
         continue;
       }
     } else {
-      console.log("Market not traded in round. ");
+      console.log("Market not traded in round.");
     }
 
     // Evaluate the amount to buy according to Skew Impact. Returns an object with amount, quote and position.
     let result = await amountToBuy(market, round, skewImpactLimit);
 
-    console.log("Trying to buy amount", result.amount);
-    console.log("Quote", result.quote);
+    // console.log("Trying to buy amount", result.amount);
+    // console.log("Quote", result.quote);
 
     if (result.amount > 0) {
       console.log(
@@ -317,7 +376,7 @@ async function testTrade(
           market.position > 0 ? "DOWN" : "UP"
         }s ($${result.quote.toFixed(2)}) of ${market.currencyKey} at ${
           market.address
-        } ...`
+        }`
       );
     }
     // if (result.amount > 0) {
