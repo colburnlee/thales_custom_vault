@@ -138,7 +138,7 @@ async function amountToBuy(market, round, skewImpactLimit) {
   //   1e18;
 
   // TEST VARIABLE
-  const availableAllocationPerAsset = 10;
+  const availableAllocationPerAsset = 300;
 
   console.log(
     `Available allocation for this (${
@@ -150,7 +150,6 @@ async function amountToBuy(market, round, skewImpactLimit) {
   if (
     maxAmmAmount < minTradeAmount ||
     amount < minTradeAmount ||
-    amount == 0 ||
     maxAmmAmount == 0
   ) {
     console.log("Not enough liquidity to trade this market");
@@ -415,16 +414,30 @@ async function buyPriceImpact(address, position, amount) {
   return skewImpact / 1e18;
 }
 
-function binarySearch(min, max, func) {
-  let mid = (min + max) / 2;
-  let result = func(mid);
-  if (result == 0) {
-    return mid;
-  } else if (result < 0) {
-    return binarySearch(mid, max, func);
-  } else {
-    return binarySearch(min, mid, func);
-  }
+// TODO: Create a Solidity contract to interact with a personal vault contract.
+function executeTrade(market, amount, position, round, gasp) {
+  // VaultContract.trade(
+  //   market.address,
+  //   w3utils.toWei(amount.toString()),
+  //   position,
+  //   {
+  //     gasLimit: 10000000,
+  //     gasPrice: gasp.add(gasp.div(5)),
+  //   }
+  // )
+  //   .then((tx) => {
+  //     tx.wait().then((receipt) => {
+  //       let transactionHash = receipt.transactionHash;
+  //       console.log("Transaction hash", transactionHash);
+  //       sendTradeSuccessMessage(market, amount, position, transactionHash);
+  //       console.log("Trade made");
+  //     });
+  //   })
+  //   .catch((e) => {
+  //     let errorBody = JSON.parse(e.error.error.body);
+  //     console.log("Trade failed", errorBody);
+  //     sendTradeErrorMessage(market.address, errorBody.error.message);
+  //   });
 }
 
 module.exports = {
