@@ -108,3 +108,6 @@ dist
 .DS_Store
 
 /.env_backup
+credentials.json
+token.json
+data.js

@@ -9,6 +9,8 @@ const Vault = require("../contracts/Vault.js");
 const ThalesAMM = require("../contracts/ThalesAMM.js");
 const marketschecker = require("./marketschecker.js");
 
+const data = require("../data.js");
+
 // const Discord = require("discord.js");
 // const vaultBot = new Discord.Client();
 // vaultBot.login(process.env.VAULT_BOT_TOKEN);
@@ -28,17 +30,20 @@ const VaultContract = new ethers.Contract(
 // TODO: Replace VaultContract variables where modification is needed ( isTradingMarketInARound, tradingMarketPositionPerRound, trade )
 
 // Test trade function ON
-async function processVault() {
+async function processVault(auth) {
+  console.log("Processing local data...");
+  const priceUpperLimit = Number(data.priceUpperLimit) / 1e18;
+  const priceLowerLimit = Number(data.priceLowerLimit) / 1e18;
+  const skewImpactLimit = Number(data.skewImpactLimit) / 1e18;
+
   console.log("Processing vault...");
   let gasp = await constants.etherprovider.getGasPrice();
   const round = await VaultContract.round();
   const roundEndTime = (await VaultContract.getCurrentRoundEnd()).toString();
   let closingDate = new Date(roundEndTime * 1000.0).getTime();
-  const priceUpperLimit = (await VaultContract.priceUpperLimit()) / 1e18;
-  const priceLowerLimit = (await VaultContract.priceLowerLimit()) / 1e18;
-  const skewImpactLimit = (await VaultContract.skewImpactLimit()) / 1e18;
+
   console.log(
-    `Vault Information... Round: ${round}, Closing Date: ${closingDate}, Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit} `
+    `Vault Information... Round: ${round}, Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit}  `
   );
   await testTrade(
     priceLowerLimit,
@@ -117,7 +122,7 @@ async function trade(
 
 async function amountToBuy(market, round, skewImpactLimit) {
   // Get the minimum trade amount (in UPs or DOWNs - usually 3)
-  const minTradeAmount = (await VaultContract.minTradeAmount()) / 1e18;
+  const minTradeAmount = Number(data.minTradeAmount) / 1e18;
   let finalAmount = 0,
     quote = 0,
     step = 10;
@@ -138,8 +143,21 @@ async function amountToBuy(market, round, skewImpactLimit) {
   //   1e18;
 
   // TEST VARIABLE
-  const availableAllocationPerAsset = 300;
+  const availableAllocationForRound = Number(data.tradingAllocation) / 1e18;
 
+  console.log(
+    `Available allocation for this round: $${availableAllocationForRound.toFixed(
+      2
+    )}`
+  );
+  let availableAllocationPerAsset;
+  // check to see if market.address is in data.availableAllocationPerMarket. If it is, update availableAllocationPerAsset, if not, use default value.
+  if (data.availableAllocationPerMarket[round][market.address]) {
+    availableAllocationPerAsset =
+      data.availableAllocationPerMarket[round][market.address] / 1e18;
+  } else {
+    availableAllocationPerAsset = availableAllocationForRound * 0.05;
+  }
   console.log(
     `Available allocation for this (${
       market.currencyKey
@@ -166,11 +184,14 @@ async function amountToBuy(market, round, skewImpactLimit) {
       `Simulated puchase impact for ${amount} ${market.currencyKey} ${
         market.position > 0 ? "DOWN" : "UP"
       }s = Skew Impact: ${
-        skewImpact <= 0 ? skewImpact.toFixed(1) : skewImpact.toFixed(10)
+        skewImpact <= 0 ? skewImpact.toFixed(5) : skewImpact.toFixed(5)
       } Skew Impact Limit: ${skewImpactLimit}`
     );
     if (skewImpact <= skewImpactLimit) break;
-    amount = Math.floor(amount * 0.95);
+    amount =
+      Math.floor(amount * 0.95) < minTradeAmount
+        ? minTradeAmount
+        : Math.floor(amount * 0.95);
   }
 
   // Get the quote for the amount of tokens to buy. If the quote is over the max allocation, then reduce the amount to buy
@@ -195,13 +216,21 @@ async function amountToBuy(market, round, skewImpactLimit) {
         amount * 0.99
       )}`
     );
-    amount = Math.floor(amount * 0.99);
+    amount =
+      Math.floor(amount * 0.99) < minTradeAmount
+        ? minTradeAmount
+        : Math.floor(amount * 0.99);
     quote =
       (await thalesAMMContract.buyFromAmmQuote(
         market.address,
         market.position,
         w3utils.toWei(amount.toString())
       )) / 1e18;
+    console.log(
+      `New quote: $${quote.toFixed(2)} for ${amount} ${market.currencyKey} ${
+        market.position > 0 ? "DOWN" : "UP"
+      }`
+    );
   }
   finalAmount = amount.toFixed(0);
 
@@ -336,33 +365,38 @@ async function testTrade(
     );
 
     // Check if this market has already been traded in this round. Returns true or false.
-    let tradedInRoundAlready = await VaultContract.isTradingMarketInARound(
-      round,
-      market.address
-    );
-
-    if (tradedInRoundAlready) {
-      console.log("Market already traded in round. ");
-
-      // Check if this market has already been traded in this round. Returns a 0 for UP, 1 for DOWN
-      let tradedBeforePosition =
-        await VaultContract.tradingMarketPositionPerRound(
-          round,
-          market.address
-        );
-      console.log(
-        `Position: ${
-          tradedBeforePosition > 0 ? "DOWN" : "UP"
-        } (${tradedBeforePosition})`
-      );
-      if (tradedBeforePosition != market.position) {
+    // let tradedInRoundAlready = await VaultContract.isTradingMarketInARound(
+    //   round,
+    //   market.address
+    // );
+    let tradedInRoundAlready = false;
+    let tradedBeforePosition;
+    for (const key in data.tradedInRoundAlready[round]) {
+      if (market.address == data.tradedInRoundAlready[round][key]) {
         console.log(
-          "Market already traded in round, but with different position. Skipping"
+          `${market.address} == ${data.tradedInRoundAlready[round][key]} `
         );
-        continue;
+        tradedInRoundAlready = true;
+        tradedBeforePosition =
+          data.tradingMarketPositionPerRound[round][market.address];
+        console.log(
+          `Previous Position: ${
+            tradedBeforePosition > 0 ? "DOWN" : "UP"
+          } (${tradedBeforePosition})`
+        );
+      } else {
+        console.log(
+          `${market.address} != ${data.tradedInRoundAlready[round][key]} `
+        );
+        tradedInRoundAlready = false;
       }
-    } else {
-      console.log("Market not traded in round.");
+    }
+
+    if (tradedBeforePosition != market.position) {
+      console.log(
+        "Market already traded in round, but with different position. Skipping"
+      );
+      continue;
     }
 
     // Evaluate the amount to buy according to Skew Impact. Returns an object with amount, quote and position.
