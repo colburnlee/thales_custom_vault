@@ -9,11 +9,8 @@ const Vault = require("../contracts/Vault.js");
 const ThalesAMM = require("../contracts/ThalesAMM.js");
 const marketschecker = require("./marketschecker.js");
 
-const data = require("../data.js");
-
-// const Discord = require("discord.js");
-// const vaultBot = new Discord.Client();
-// vaultBot.login(process.env.VAULT_BOT_TOKEN);
+const data = require("../data.json");
+const fs = require("fs");
 
 const thalesAMMContract = new ethers.Contract(
   process.env.THALES_AMM_CONTRACT,
@@ -26,8 +23,6 @@ const VaultContract = new ethers.Contract(
   Vault.vaultContract.abi,
   wallet
 );
-
-// TODO: Replace VaultContract variables where modification is needed ( isTradingMarketInARound, tradingMarketPositionPerRound, trade )
 
 // Test trade function ON
 async function processVault(auth) {
@@ -45,6 +40,7 @@ async function processVault(auth) {
   console.log(
     `Vault Information... Round: ${round}, Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit}  `
   );
+
   await testTrade(
     priceLowerLimit,
     priceUpperLimit,
@@ -53,71 +49,6 @@ async function processVault(auth) {
     closingDate,
     gasp
   );
-}
-
-async function trade(
-  priceLowerLimit,
-  priceUpperLimit,
-  skewImpactLimit,
-  round,
-  roundEndTime,
-  gasp
-) {
-  let tradingMarkets = await marketschecker.processMarkets(
-    priceLowerLimit,
-    priceUpperLimit,
-    roundEndTime,
-    skewImpactLimit
-  );
-
-  for (const key in tradingMarkets) {
-    let market = tradingMarkets[key];
-
-    let tradedInRoundAlready = await VaultContract.isTradingMarketInARound(
-      round,
-      market.address
-    );
-    if (tradedInRoundAlready) {
-      let tradedBeforePosition =
-        await VaultContract.tradingMarketPositionPerRound(
-          round,
-          market.address
-        );
-      if (tradedBeforePosition != market.position) {
-        continue;
-      }
-    }
-
-    let result = await amountToBuy(market, round, skewImpactLimit);
-
-    console.log("Trying to buy amount", result.amount);
-    console.log("Quote", result.quote);
-
-    if (result.amount > 0) {
-      try {
-        let tx = await VaultContract.trade(
-          market.address,
-          w3utils.toWei(result.amount.toString()),
-          result.position,
-          {
-            gasLimit: 10000000,
-            gasPrice: gasp.add(gasp.div(5)),
-          }
-        );
-        let receipt = await tx.wait();
-        let transactionHash = receipt.transactionHash;
-        console.log("Transaction hash", transactionHash);
-        // await sendTradeSuccessMessage(market, result, transactionHash);
-        console.log("Trade made");
-      } catch (e) {
-        let errorBody = JSON.parse(e.error.error.body);
-        console.log("Trade failed", errorBody);
-        // await sendTradeErrorMessage(market.address, errorBody.error.message);
-      }
-    }
-  }
-
-  console.log("Finished trading markets  ");
 }
 
 async function amountToBuy(market, round, skewImpactLimit) {
@@ -136,13 +67,7 @@ async function amountToBuy(market, round, skewImpactLimit) {
       market.position
     )) / 1e18;
 
-  // TODO: Recreate this for a personal vault
-  // Calls the Vault contract to get the available allocation for the market. This is calculated from the Vault: allocationLimitsPerMarketPerRound * tradingAllocation
-  // const availableAllocationPerAsset =
-  //   (await VaultContract.getAvailableAllocationForMarket(market.address)) /
-  //   1e18;
-
-  // TEST VARIABLE
+  // Get the available allocation for this market in this round
   const availableAllocationForRound = Number(data.tradingAllocation) / 1e18;
 
   console.log(
@@ -252,6 +177,236 @@ async function amountToBuy(market, round, skewImpactLimit) {
   return { amount: finalAmount, quote: finalQuote, position: market.position };
 }
 
+async function testTrade(
+  priceLowerLimit,
+  priceUpperLimit,
+  skewImpactLimit,
+  round,
+  roundEndTime,
+  gasp
+) {
+  let tradingMarkets = await marketschecker.processMarkets(
+    priceLowerLimit,
+    priceUpperLimit,
+    roundEndTime,
+    skewImpactLimit
+  );
+
+  for (const key in tradingMarkets) {
+    let market = tradingMarkets[key];
+    console.log(
+      `--------------------Processing ${market.currencyKey} ${
+        market.position > 0 ? "DOWN" : "UP"
+      } at ${market.address}-------------------`
+    );
+
+    // Check if this market has already been traded in this round. Returns true or false.
+    // let tradedInRoundAlready = await VaultContract.isTradingMarketInARound(
+    //   round,
+    //   market.address
+    // );
+    let tradedInRoundAlready;
+    let tradedBeforePosition;
+    for (const key in data.tradedInRoundAlready[round]) {
+      if (market.address == data.tradedInRoundAlready[round][key]) {
+        tradedInRoundAlready = true;
+        tradedBeforePosition =
+          data.tradingMarketPositionPerRound[round][market.address];
+        console.log(
+          `Previous Position: ${
+            tradedBeforePosition > 0 ? "DOWN" : "UP"
+          } (${tradedBeforePosition})`
+        );
+        if (tradedBeforePosition != market.position) {
+          console.log(
+            "Market already traded in round, but with different position. Skipping"
+          );
+          continue;
+        }
+      } else {
+        tradedInRoundAlready = false;
+      }
+    }
+
+    // Evaluate the amount to buy according to Skew Impact. Returns an object with amount, quote and position.
+    let result = await amountToBuy(market, round, skewImpactLimit);
+
+    if (result.amount > 0) {
+      console.log(
+        `Executing order to buy ${result.amount} ${
+          market.position > 0 ? "DOWN" : "UP"
+        }s ($${result.quote.toFixed(2)}) of ${market.currencyKey} at ${
+          market.address
+        }`
+      );
+      executeTrade(market, result, round, gasp);
+    } else {
+      console.log(
+        `No trade made for ${market.currencyKey} ${
+          market.position > 0 ? "DOWN" : "UP"
+        } at ${market.address}`
+      );
+    }
+    // if (result.amount > 0) {
+    //   try {
+    //     let tx = await VaultContract.trade(
+    //       market.address,
+    //       w3utils.toWei(result.amount.toString()),
+    //       result.position,
+    //       {
+    //         gasLimit: 10000000,
+    //         gasPrice: gasp.add(gasp.div(5)),
+    //       }
+    //     );
+    //     let receipt = await tx.wait();
+    //     let transactionHash = receipt.transactionHash;
+    //     console.log("Transaction hash", transactionHash);
+    //     // await sendTradeSuccessMessage(market, result, transactionHash);
+    //     console.log("Trade made");
+    //   } catch (e) {
+    //     let errorBody = JSON.parse(e.error.error.body);
+    //     console.log("Trade failed", errorBody);
+    //     // await sendTradeErrorMessage(market.address, errorBody.error.message);
+    //   }
+    // }
+  }
+}
+
+// TODO: Create a Solidity contract to interact with a personal vault contract.
+function executeTrade(market, result, round, gasp) {
+  // market { address: '0xc1af77a1efea7326df378af9195306f0a3094f51', position: 1, currencyKey: 'LINK', price: 0.8111760272895937 }
+  //result { amount: '494', quote: 406.5630697385673, position: 1 }
+
+  const formattedAmount = w3utils.toWei(result.amount.toString());
+  const formattedQuote = BigInt(w3utils.toWei(result.quote.toString()));
+  // VaultContract.trade(
+  //   market.address,
+  //   formattedAmount,
+  //   market.position,
+  //   {
+  //     gasLimit: 10000000,
+  //     gasPrice: gasp.add(gasp.div(5)),
+  //   }
+  // )
+  //   .then((tx) => {
+  //     tx.wait().then((receipt) => {
+  //       let transactionHash = receipt.transactionHash;
+  //       console.log("Transaction hash", transactionHash);
+  console.log("Trade made");
+  // Log the details of the trade (quantity, price, market address, etc.) and save to data
+
+  data.tradingMarketPositionPerRound[round][market.address] = market.position;
+  let newAllowance;
+  // if availableAllocationPerMarket has a balance, subtract the amount traded from it.
+  let availableAllocationPerMarket =
+    BigInt(data.tradingAllocation) / BigInt(20);
+  if (data.availableAllocationPerMarket[round][market.address]) {
+    console.log("Market has already been traded in this round.");
+    let priorAllowance = BigInt(
+      data.availableAllocationPerMarket[round][market.address]
+    );
+    newAllowance = priorAllowance - BigInt(formattedQuote);
+    // update the newAllowance to replace the old one in the data object
+    data.availableAllocationPerMarket[round][market.address] =
+      newAllowance.toString();
+  } else {
+    console.log("Market has not been traded in this round yet.");
+    // If not, set it to tradingAllocation - amount quoted.
+    data.tradedInRoundAlready[round].push(market.address);
+    newAllowance = availableAllocationPerMarket - BigInt(formattedQuote);
+    data.availableAllocationPerMarket[round][market.address] =
+      newAllowance.toString();
+  }
+  console.log(
+    `New allowance for ${market.address} is ${newAllowance} ($${
+      newAllowance / BigInt(1e18)
+    })`
+  );
+  // save the data to the file
+  fs.writeFileSync(
+    "./data.json",
+    JSON.stringify(data, null, 2),
+    "utf-8",
+    (err) => {
+      if (err) throw err;
+    }
+  );
+  console.log("Data written to file");
+
+  //   });
+  // })
+  // .catch((e) => {
+  //   let errorBody = JSON.parse(e.error.error.body);
+  //   console.log("Trade failed", errorBody);
+  //   sendTradeErrorMessage(market.address, errorBody.error.message);
+  // });
+}
+
+async function trade(
+  priceLowerLimit,
+  priceUpperLimit,
+  skewImpactLimit,
+  round,
+  roundEndTime,
+  gasp
+) {
+  let tradingMarkets = await marketschecker.processMarkets(
+    priceLowerLimit,
+    priceUpperLimit,
+    roundEndTime,
+    skewImpactLimit
+  );
+
+  for (const key in tradingMarkets) {
+    let market = tradingMarkets[key];
+
+    let tradedInRoundAlready = await VaultContract.isTradingMarketInARound(
+      round,
+      market.address
+    );
+    if (tradedInRoundAlready) {
+      let tradedBeforePosition =
+        await VaultContract.tradingMarketPositionPerRound(
+          round,
+          market.address
+        );
+      if (tradedBeforePosition != market.position) {
+        continue;
+      }
+    }
+
+    let result = await amountToBuy(market, round, skewImpactLimit);
+
+    console.log("Trying to buy amount", result.amount);
+    console.log("Quote", result.quote);
+
+    if (result.amount > 0) {
+      try {
+        let tx = await VaultContract.trade(
+          market.address,
+          w3utils.toWei(result.amount.toString()),
+          result.position,
+          {
+            gasLimit: 10000000,
+            gasPrice: gasp.add(gasp.div(5)),
+          }
+        );
+        let receipt = await tx.wait();
+        let transactionHash = receipt.transactionHash;
+        console.log("Transaction hash", transactionHash);
+        // await sendTradeSuccessMessage(market, result, transactionHash);
+        console.log("Trade made");
+      } catch (e) {
+        let errorBody = JSON.parse(e.error.error.body);
+        console.log("Trade failed", errorBody);
+        // await sendTradeErrorMessage(market.address, errorBody.error.message);
+      }
+    }
+  }
+
+  console.log("Finished trading markets  ");
+}
+
 async function sendTradeSuccessMessage(market, result, transactionHash) {
   var message = new Discord.MessageEmbed()
     .addFields(
@@ -341,104 +496,6 @@ function delay(time) {
   });
 }
 
-async function testTrade(
-  priceLowerLimit,
-  priceUpperLimit,
-  skewImpactLimit,
-  round,
-  roundEndTime,
-  gasp
-) {
-  let tradingMarkets = await marketschecker.processMarkets(
-    priceLowerLimit,
-    priceUpperLimit,
-    roundEndTime,
-    skewImpactLimit
-  );
-
-  for (const key in tradingMarkets) {
-    let market = tradingMarkets[key];
-    console.log(
-      `--------------------Processing ${market.currencyKey} ${
-        market.position > 0 ? "DOWN" : "UP"
-      } at ${market.address}-------------------`
-    );
-
-    // Check if this market has already been traded in this round. Returns true or false.
-    // let tradedInRoundAlready = await VaultContract.isTradingMarketInARound(
-    //   round,
-    //   market.address
-    // );
-    let tradedInRoundAlready = false;
-    let tradedBeforePosition;
-    for (const key in data.tradedInRoundAlready[round]) {
-      if (market.address == data.tradedInRoundAlready[round][key]) {
-        console.log(
-          `${market.address} == ${data.tradedInRoundAlready[round][key]} `
-        );
-        tradedInRoundAlready = true;
-        tradedBeforePosition =
-          data.tradingMarketPositionPerRound[round][market.address];
-        console.log(
-          `Previous Position: ${
-            tradedBeforePosition > 0 ? "DOWN" : "UP"
-          } (${tradedBeforePosition})`
-        );
-      } else {
-        console.log(
-          `${market.address} != ${data.tradedInRoundAlready[round][key]} `
-        );
-        tradedInRoundAlready = false;
-      }
-    }
-
-    if (tradedBeforePosition != market.position) {
-      console.log(
-        "Market already traded in round, but with different position. Skipping"
-      );
-      continue;
-    }
-
-    // Evaluate the amount to buy according to Skew Impact. Returns an object with amount, quote and position.
-    let result = await amountToBuy(market, round, skewImpactLimit);
-
-    // console.log("Trying to buy amount", result.amount);
-    // console.log("Quote", result.quote);
-
-    if (result.amount > 0) {
-      console.log(
-        `Executing order to buy ${result.amount} ${
-          market.position > 0 ? "DOWN" : "UP"
-        }s ($${result.quote.toFixed(2)}) of ${market.currencyKey} at ${
-          market.address
-        }`
-      );
-    }
-    // if (result.amount > 0) {
-    //   try {
-    //     let tx = await VaultContract.trade(
-    //       market.address,
-    //       w3utils.toWei(result.amount.toString()),
-    //       result.position,
-    //       {
-    //         gasLimit: 10000000,
-    //         gasPrice: gasp.add(gasp.div(5)),
-    //       }
-    //     );
-    //     let receipt = await tx.wait();
-    //     let transactionHash = receipt.transactionHash;
-    //     console.log("Transaction hash", transactionHash);
-    //     // await sendTradeSuccessMessage(market, result, transactionHash);
-    //     console.log("Trade made");
-    //   } catch (e) {
-    //     let errorBody = JSON.parse(e.error.error.body);
-    //     console.log("Trade failed", errorBody);
-    //     // await sendTradeErrorMessage(market.address, errorBody.error.message);
-    //   }
-    // }
-  }
-}
-
 async function buyPriceImpact(address, position, amount) {
   let skewImpact = await thalesAMMContract.buyPriceImpact(
     address,
@@ -446,32 +503,6 @@ async function buyPriceImpact(address, position, amount) {
     w3utils.toWei(amount.toString())
   );
   return skewImpact / 1e18;
-}
-
-// TODO: Create a Solidity contract to interact with a personal vault contract.
-function executeTrade(market, amount, position, round, gasp) {
-  // VaultContract.trade(
-  //   market.address,
-  //   w3utils.toWei(amount.toString()),
-  //   position,
-  //   {
-  //     gasLimit: 10000000,
-  //     gasPrice: gasp.add(gasp.div(5)),
-  //   }
-  // )
-  //   .then((tx) => {
-  //     tx.wait().then((receipt) => {
-  //       let transactionHash = receipt.transactionHash;
-  //       console.log("Transaction hash", transactionHash);
-  //       sendTradeSuccessMessage(market, amount, position, transactionHash);
-  //       console.log("Trade made");
-  //     });
-  //   })
-  //   .catch((e) => {
-  //     let errorBody = JSON.parse(e.error.error.body);
-  //     console.log("Trade failed", errorBody);
-  //     sendTradeErrorMessage(market.address, errorBody.error.message);
-  //   });
 }
 
 module.exports = {
