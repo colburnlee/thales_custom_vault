@@ -70,11 +70,6 @@ async function amountToBuy(market, round, skewImpactLimit) {
   // Get the available allocation for this market in this round
   const availableAllocationForRound = Number(data.tradingAllocation) / 1e18;
 
-  console.log(
-    `Available allocation for this round: $${availableAllocationForRound.toFixed(
-      2
-    )}`
-  );
   let availableAllocationPerAsset;
   // check to see if market.address is in data.availableAllocationPerMarket. If it is, update availableAllocationPerAsset, if not, use default value.
   if (data.availableAllocationPerMarket[round][market.address]) {
@@ -84,9 +79,7 @@ async function amountToBuy(market, round, skewImpactLimit) {
     availableAllocationPerAsset = availableAllocationForRound * 0.05;
   }
   console.log(
-    `Available allocation for this (${
-      market.currencyKey
-    }) market: $${availableAllocationPerAsset.toFixed(2)}`
+    `Available allocation market: $${availableAllocationPerAsset.toFixed(2)}`
   );
   const maxAllocationAmount = availableAllocationPerAsset / market.price; // this is a cieling value, as it would a trade with zero slippage
   let amount = Math.round(maxAllocationAmount);
@@ -95,7 +88,6 @@ async function amountToBuy(market, round, skewImpactLimit) {
     amount < minTradeAmount ||
     maxAmmAmount == 0
   ) {
-    console.log("Not enough liquidity to trade this market");
     return { amount: 0, quote: 0, position: market.position };
   }
   while (amount < maxAmmAmount) {
@@ -278,24 +270,60 @@ function executeTrade(market, result, round, gasp) {
   //result { amount: '494', quote: 406.5630697385673, position: 1 }
 
   const formattedAmount = w3utils.toWei(result.amount.toString());
-  const formattedQuote = BigInt(w3utils.toWei(result.quote.toString()));
-  // VaultContract.trade(
-  //   market.address,
-  //   formattedAmount,
-  //   market.position,
-  //   {
-  //     gasLimit: 10000000,
-  //     gasPrice: gasp.add(gasp.div(5)),
-  //   }
-  // )
-  //   .then((tx) => {
-  //     tx.wait().then((receipt) => {
-  //       let transactionHash = receipt.transactionHash;
-  //       console.log("Transaction hash", transactionHash);
-  console.log("Trade made");
+  const formattedQuote = w3utils.toWei(result.quote.toString());
+  /// @notice buy positions of the defined type of a given market from the AMM
+  /// @param market a Positional Market known to Market Manager
+  /// @param position UP or DOWN
+  /// @param amount how many positions
+  /// @param expectedPayout how much does the buyer expect to pay (retrieved via quote)
+  /// @param additionalSlippage how much of a slippage on the sUSD expectedPayout will the buyer accept
+  // thalesAMM.buyFromAMM(market, position, amount, quote, 0)
+  thalesAMMContract
+    .buyFromAMM(
+      market.address,
+      market.position,
+      formattedAmount,
+      formattedQuote,
+      0,
+      {
+        gasLimit: 10000000,
+        gasPrice: gasp.add(gasp.div(5)),
+      }
+    )
+    .then((tx) => {
+      tx.wait()
+        .then((receipt) => {
+          let transactionHash = receipt.transactionHash;
+          console.log("Transaction hash", transactionHash);
+          // Create a log of the trade
+          let tradeLog = {
+            market: market.address,
+            position: market.position,
+            amount: result.amount,
+            quote: result.quote,
+            transactionHash: transactionHash,
+          };
+          data.tradeLog.push(tradeLog);
+        })
+        .catch((e) => {
+          let errorBody = JSON.parse(e.error.error.body);
+          console.log("Trade failed", errorBody);
+          // create a log of the failed trade
+          let tradeLog = {
+            market: market.address,
+            position: market.position,
+            amount: result.amount,
+            quote: result.quote,
+            transactionHash: "Failed",
+            errorBody: errorBody,
+          };
+          data.errorLog.push(tradeLog);
+        });
+    });
   // Log the details of the trade (quantity, price, market address, etc.) and save to data
 
-  data.tradingMarketPositionPerRound[round][market.address] = market.position;
+  data.tradingMarketPositionPerRound[round][market.address] =
+    market.position.toString();
   let newAllowance;
   // if availableAllocationPerMarket has a balance, subtract the amount traded from it.
   let availableAllocationPerMarket =
@@ -332,14 +360,6 @@ function executeTrade(market, result, round, gasp) {
     }
   );
   console.log("Data written to file");
-
-  //   });
-  // })
-  // .catch((e) => {
-  //   let errorBody = JSON.parse(e.error.error.body);
-  //   console.log("Trade failed", errorBody);
-  //   sendTradeErrorMessage(market.address, errorBody.error.message);
-  // });
 }
 
 async function trade(
