@@ -6,6 +6,7 @@ const { authenticate } = require("@google-cloud/local-auth");
 const { google } = require("googleapis");
 
 const vault = require("./source/vault.js");
+const artbitrumVault = require("./source/arbitrumVault.js");
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
@@ -83,12 +84,19 @@ async function doLoop() {
 
 async function doMain(auth) {
   console.log(
-    "==================== START PROCESSING VAULT ===================="
+    "==================== START PROCESSING OP VAULT ===================="
   );
-
   await vault.processVault(auth);
-
-  console.log("==================== END PROCESSING VAULT ====================");
+  console.log(
+    "==================== END PROCESSING OP VAULT ===================="
+  );
+  console.log(
+    "==================== START PROCESSING ARBITRUM VAULT ===================="
+  );
+  await artbitrumVault.processVault(auth);
+  console.log(
+    "==================== END PROCESSING ARBITRUM VAULT ===================="
+  );
 }
 
 doLoop();

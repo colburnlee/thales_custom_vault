@@ -1,13 +1,7 @@
 require("dotenv").config();
 
-// const constants = require("../constants.js");
 const thalesData = require("thales-data");
 const ethers = require("ethers");
-// const w3utils = require("web3-utils");
-
-// const wallet = new ethers.Wallet(constants.privateKey, constants.etherprovider);
-
-const { performance } = require("perf_hooks");
 
 const Position = {
   UP: 0,
@@ -22,8 +16,7 @@ async function processMarkets(
   skewImpactLimit,
   wallet,
   positionalContractAddress,
-  abi,
-  networkId
+  abi
 ) {
   let tradingMarkets = [];
 
@@ -34,7 +27,7 @@ async function processMarkets(
   let minMaturityValue = parseInt(new Date().getTime() / 1000);
   let positionalMarkets = await thalesData.binaryOptions.markets({
     max: Infinity,
-    network: process.env.NETWORK_ID,
+    network: process.env.ARBITRUM_NETWORK_ID,
     minMaturity: minMaturityValue,
   });
 
@@ -46,7 +39,7 @@ async function processMarkets(
 
   const [pricesForAllActiveMarkets, priceImpactForAllActiveMarkets] =
     await Promise.all([
-      positionalMarketDataContract.getBasePricesForAllActiveMarkets(),
+      positionalMarketDataContract.getPricesForAllActiveMarkets(), // Changed for Arbitrum
       positionalMarketDataContract.getPriceImpactForAllActiveMarkets(),
     ]);
 
@@ -122,12 +115,6 @@ async function processMarkets(
   );
 
   return tradingMarkets;
-}
-
-function delay(time) {
-  return new Promise(function (resolve) {
-    setTimeout(resolve, time);
-  });
 }
 
 function inTradingWeek(maturityDate, roundEndTime) {
