@@ -23,8 +23,9 @@ const { priceUpperLimit, priceLowerLimit, skewImpactLimit } =
 
 const processVault = async (auth, networkId) => {
   // Get the current vault gas price, round, and round end time
-  const [gasPrice, round, roundEndTime, closingDate] =
-    await setOptimismVariables(VaultContract);
+  const [round, roundEndTime, closingDate] = await setOptimismVariables(
+    VaultContract
+  );
 
   // Test trades for each market
   await evaluateMarkets(
@@ -33,7 +34,7 @@ const processVault = async (auth, networkId) => {
     skewImpactLimit,
     round,
     closingDate,
-    gasPrice
+    networkId
   );
   // Write the data to a file
   fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
@@ -119,8 +120,7 @@ const setNetworkVariables = async (networkId = "10") => {
 
 const setOptimismVariables = async (contract) => {
   const [gasPrice, round, roundEndTime] = await Promise.all([
-    // contract.gasPrice(),
-    1000000,
+    contract.gasPrice(),
     contract.round(),
     contract.roundEndTime(),
   ]);
@@ -143,14 +143,22 @@ const getLocalVariables = (data) => {
   };
 };
 
+// TODO: Make wallet, positionalContractAddress, PositionalMarketDataContract, networkId variables tied to the networkId in processVault
 const evaluateMarkets = async (
   priceLowerLimit,
   priceUpperLimit,
   skewImpactLimit,
   round,
   roundEndTime,
-  gasp
+  networkId
 ) => {
+  const {
+    wallet,
+    positionalContractAddress,
+    PositionalMarketDataContract,
+    networkId,
+  } = await setNetworkVariables(networkId);
+  const gasp = await wallet.getGasPrice();
   let tradingMarkets = await marketschecker.processMarkets(
     priceLowerLimit,
     priceUpperLimit,
