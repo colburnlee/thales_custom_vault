@@ -22,6 +22,10 @@ let arbitrumProvider = new ethers.providers.JsonRpcProvider(
   process.env.ARBITRUM_1RPC_URL
 );
 
+let bscProvider = new ethers.providers.JsonRpcProvider(
+  process.env.BSC_1RPC_URL
+);
+
 let baseUrl = process.env.BASE_URL;
 
 module.exports = {
@@ -29,4 +33,5 @@ module.exports = {
   etherprovider,
   baseUrl,
   arbitrumProvider,
+  bscProvider,
 };

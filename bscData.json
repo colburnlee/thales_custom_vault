@@ -1,0 +1,23 @@
+{
+  "priceUpperLimit": "900000000000000000",
+  "priceLowerLimit": "750000000000000000",
+  "skewImpactLimit": "0",
+  "thalesAMM": "0x2b89275efB9509c33d9AD92A4586bdf8c4d21505",
+  "tradingAllocation": "500000000000000000000",
+  "roundLength": "604800",
+  "minTradeAmount": "3000000000000000000",
+  "availableAllocationPerMarket": {
+    "15": {},
+    "16": {}
+  },
+  "tradedInRoundAlready": {
+    "15": [],
+    "16": []
+  },
+  "tradingMarketPositionPerRound": {
+    "15": {},
+    "16": {}
+  },
+  "tradeLog": [],
+  "errorLog": []
+}

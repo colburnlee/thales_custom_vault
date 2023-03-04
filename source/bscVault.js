@@ -1,31 +1,38 @@
 require("dotenv").config();
+
 const constants = require("../constants.js");
 const ethers = require("ethers");
 const w3utils = require("web3-utils");
-
+const bscWallet = new ethers.Wallet(
+  constants.privateKey,
+  constants.bscProvider
+);
 const Vault = require("../contracts/Vault.js");
 const ThalesAMM = require("../contracts/ThalesAMM.js");
-const marketschecker = require("./marketschecker.js");
+const marketschecker = require("./bscMarketschecker.js"); // Network specific
 
-const data = require("../data.json");
+const data = require("../bscData.json"); // Network specific
 const fs = require("fs");
 
-const wallet = new ethers.Wallet(constants.privateKey, constants.etherprovider);
 const thalesAMMContract = new ethers.Contract(
-  process.env.THALES_AMM_CONTRACT,
+  process.env.BSC_THALES_AMM_CONTRACT, // Network specific
   ThalesAMM.thalesAMMContract.abi,
-  wallet
+  bscWallet
 );
+const positionalContractAddress =
+  process.env.BSC_POSITIONAL_MARKET_DATA_CONTRACT; // Network specific
+const PositionalMarketDataContract = require("../contracts/ArbitrumPositionalMarketData.js"); // Arbitrum & BSC ABI is the same
+const networkId = process.env.BSC_NETWORK_ID;
+
+// This will pull from Optimism still. Requires separate ethers provider.
+const wallet = new ethers.Wallet(constants.privateKey, constants.etherprovider); // Optimism Specific - Needed to pull vault data & used for every network's vault
 const VaultContract = new ethers.Contract(
   process.env.AMM_VAULT_CONTRACT,
   Vault.vaultContract.abi,
   wallet
 );
 
-const positionalContractAddress = process.env.POSITIONAL_MARKET_DATA_CONTRACT;
-const PositionalMarketDataContract = require("../contracts/PositionalMarketData.js");
-const networkId = process.env.NETWORK_ID;
-
+// Test trade function ON
 async function processVault(auth) {
   console.log("Processing local data...");
   const priceUpperLimit = Number(data.priceUpperLimit) / 1e18;
@@ -33,13 +40,13 @@ async function processVault(auth) {
   const skewImpactLimit = Number(data.skewImpactLimit) / 1e18;
 
   console.log("Processing vault...");
-  let gasp = await constants.etherprovider.getGasPrice();
+  let gasp = await constants.bscProvider.getGasPrice();
   const round = await VaultContract.round();
   const roundEndTime = (await VaultContract.getCurrentRoundEnd()).toString();
   let closingDate = new Date(roundEndTime * 1000.0).getTime();
 
   console.log(
-    `Vault Information... Round: ${round}, Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit}  `
+    `BSC Vault - Round: ${round}, Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit}  `
   );
 
   await testTrade(
@@ -50,9 +57,6 @@ async function processVault(auth) {
     closingDate,
     gasp
   );
-
-  console.log("Processing vault complete.");
-  fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 }
 
 async function amountToBuy(market, round, skewImpactLimit) {
@@ -186,7 +190,7 @@ async function testTrade(
     priceUpperLimit,
     roundEndTime,
     skewImpactLimit,
-    wallet,
+    bscWallet,
     positionalContractAddress,
     PositionalMarketDataContract,
     networkId
@@ -235,7 +239,7 @@ async function testTrade(
           market.address
         }`
       );
-      await executeTrade(market, result, round, gasp);
+      executeTrade(market, result, round, gasp);
     } else {
       console.log(
         `No trade made for ${market.currencyKey} ${
@@ -246,102 +250,101 @@ async function testTrade(
   }
 }
 
-async function executeTrade(market, result, round, gasp) {
+function executeTrade(market, result, round, gasp) {
   // market { address: '0xc1af77a1efea7326df378af9195306f0a3094f51', position: 1, currencyKey: 'LINK', price: 0.8111760272895937 }
   //result { amount: '494', quote: 406.5630697385673, position: 1 }
-  // slippage: "5000000000000000"
 
-  if (result.amount > 0) {
-    try {
-      // Check if this market has already been traded in this round. Returns true or false.
-      let tradedInRoundAlready;
-      let tradedBeforePosition;
-      for (const key in data.tradedInRoundAlready[round]) {
-        if (market.address == data.tradedInRoundAlready[round][key]) {
-          tradedInRoundAlready = true;
-          tradedBeforePosition =
-            data.tradingMarketPositionPerRound[round][market.address];
-          console.log(
-            `Previous Position: ${
-              tradedBeforePosition > 0 ? "DOWN" : "UP"
-            } (${tradedBeforePosition})`
-          );
-          if (tradedBeforePosition != market.position) {
-            console.log(
-              "Market already traded in round, but with different position. Skipping"
+  const formattedAmount = w3utils.toWei(result.amount.toString());
+  const formattedQuote = w3utils.toWei(result.quote.toString());
+  /// @notice buy positions of the defined type of a given market from the AMM
+  /// @param market a Positional Market known to Market Manager
+  /// @param position UP or DOWN
+  /// @param amount how many positions
+  /// @param expectedPayout how much does the buyer expect to pay (retrieved via quote)
+  /// @param additionalSlippage how much of a slippage on the sUSD expectedPayout will the buyer accept
+  // thalesAMM.buyFromAMM(market, position, amount, quote, 0)
+  thalesAMMContract
+    .buyFromAMM(
+      market.address,
+      market.position,
+      formattedAmount,
+      formattedQuote,
+      0,
+      {
+        gasLimit: 10000000,
+        gasPrice: gasp.add(gasp.div(5)),
+      }
+    )
+    .then((tx) => {
+      tx.wait()
+        .then((receipt) => {
+          let transactionHash = receipt.transactionHash;
+          console.log("Transaction hash", transactionHash);
+          // Create a log of the trade
+          let tradeLog = {
+            market: market.address,
+            position: market.position,
+            amount: result.amount,
+            quote: result.quote,
+            transactionHash: transactionHash,
+          };
+          data.tradeLog.push(tradeLog);
+          // Log the details of the trade (quantity, price, market address, etc.) and save to data
+
+          data.tradingMarketPositionPerRound[round][market.address] =
+            market.position.toString();
+          let newAllowance;
+          // if availableAllocationPerMarket has a balance, subtract the amount traded from it.
+          let availableAllocationPerMarket =
+            BigInt(data.tradingAllocation) / BigInt(20);
+          if (data.availableAllocationPerMarket[round][market.address]) {
+            let priorAllowance = BigInt(
+              data.availableAllocationPerMarket[round][market.address]
             );
-            continue;
+            newAllowance = priorAllowance - BigInt(formattedQuote);
+            // update the newAllowance to replace the old one in the data object
+            data.availableAllocationPerMarket[round][market.address] =
+              newAllowance.toString();
+          } else {
+            // If not, set it to tradingAllocation - amount quoted.
+            data.tradedInRoundAlready[round].push(market.address);
+            newAllowance =
+              availableAllocationPerMarket - BigInt(formattedQuote);
+            data.availableAllocationPerMarket[round][market.address] =
+              newAllowance.toString();
           }
-        } else {
-          tradedInRoundAlready = false;
-        }
-      }
+          console.log(
+            `New allowance for ${market.address} is ${newAllowance} ($${
+              newAllowance / BigInt(1e18)
+            })`
+          );
+        })
+        .catch((e) => {
+          let errorBody = JSON.parse(e.body);
+          console.log("Trade failed", errorBody);
+          // create a log of the failed trade
+          let tradeLog = {
+            market: market.address,
+            position: market.position,
+            amount: result.amount,
+            quote: result.quote,
+            transactionHash: "Failed",
+            errorBody: errorBody,
+          };
+          data.errorLog.push(tradeLog);
+        });
+    });
 
-      if (tradedInRoundAlready) {
-        console.log(
-          `Market already traded in round with same position. Skipping`
-        );
-        return;
-      } else {
-        data.tradedInRoundAlready[round].push(market.address);
-        data.tradingMarketPositionPerRound[round][market.address] =
-          market.position;
-      }
-
-      // Execute trade
-      let tx = await thalesAMMContract.buyFromAMM(
-        market.address,
-        market.position,
-        w3utils.toWei(result.amount.toString()),
-        w3utils.toWei(result.quote.toString()),
-        "2500000000000000",
-        { gasLimit: 10000000, gasPrice: gasp.add(gasp.div(5)) }
-      );
-      let reciept = await tx.wait();
-      let transactionHash = reciept.transactionHash;
-      console.log(`Transaction hash: ${transactionHash}`);
-      // Create a log of the trade
-      let tradeLog = {
-        market: market.address,
-        position: market.position,
-        amount: result.amount,
-        quote: result.quote,
-        transactionHash: transactionHash,
-      };
-      data.tradeLog.push(tradeLog);
-      // Log the details of the trade (quantity, price, market address, etc.) and save to data
-
-      data.tradingMarketPositionPerRound[round][market.address] =
-        market.position.toString();
-      let newAllowance;
-      // if availableAllocationPerMarket has a balance, subtract the amount traded from it.
-      let availableAllocationPerMarket =
-        BigInt(data.tradingAllocation) / BigInt(20);
-      if (data.availableAllocationPerMarket[round][market.address]) {
-        let priorAllowance = BigInt(
-          data.availableAllocationPerMarket[round][market.address]
-        );
-        newAllowance = priorAllowance - BigInt(w3utils.toWei(result.quote));
-        // update the newAllowance to replace the old one in the data object
-        data.availableAllocationPerMarket[round][market.address] =
-          newAllowance.toString();
-      } else {
-        // If not, set it to tradingAllocation - amount quoted.
-        data.tradedInRoundAlready[round].push(market.address);
-        newAllowance =
-          availableAllocationPerMarket - BigInt(w3utils.toWei(result.quote));
-        data.availableAllocationPerMarket[round][market.address] =
-          newAllowance.toString();
-      }
-      console.log(
-        `New allowance for ${market.address} is ${newAllowance} ($${
-          newAllowance / BigInt(1e18)
-        })`
-      );
-    } catch (e) {
-      console.log(e.message);
+  // save the data to the file
+  fs.writeFileSync(
+    "./bscData.json",
+    JSON.stringify(data, null, 2),
+    "utf-8",
+    (err) => {
+      if (err) throw err;
     }
-  }
+  );
+  console.log("Data written to file");
 }
 
 module.exports = {

@@ -2,58 +2,219 @@ require("dotenv").config();
 const constants = require("../constants.js");
 const ethers = require("ethers");
 const w3utils = require("web3-utils");
-
 const Vault = require("../contracts/Vault.js");
 const ThalesAMM = require("../contracts/ThalesAMM.js");
+const PositionalMarketDataContract = require("../contracts/PositionalMarketData.js");
 const marketschecker = require("./marketschecker.js");
-
 const data = require("../data.json");
 const fs = require("fs");
 
-const wallet = new ethers.Wallet(constants.privateKey, constants.etherprovider);
-const thalesAMMContract = new ethers.Contract(
-  process.env.THALES_AMM_CONTRACT,
-  ThalesAMM.thalesAMMContract.abi,
-  wallet
-);
-const VaultContract = new ethers.Contract(
-  process.env.AMM_VAULT_CONTRACT,
-  Vault.vaultContract.abi,
-  wallet
-);
+// Set the OP Wallet and Vault Contract Information
+const {
+  thalesAMMContract,
+  VaultContract,
+  positionalContractAddress,
+  networkId,
+} = await setNetworkVariables();
 
-const positionalContractAddress = process.env.POSITIONAL_MARKET_DATA_CONTRACT;
-const PositionalMarketDataContract = require("../contracts/PositionalMarketData.js");
-const networkId = process.env.NETWORK_ID;
+// Pull in local data - priceUpperLimit, priceLowerLimit, skewImpactLimit
+const { priceUpperLimit, priceLowerLimit, skewImpactLimit } =
+  getLocalVariables(data);
 
-async function processVault(auth) {
-  console.log("Processing local data...");
-  const priceUpperLimit = Number(data.priceUpperLimit) / 1e18;
-  const priceLowerLimit = Number(data.priceLowerLimit) / 1e18;
-  const skewImpactLimit = Number(data.skewImpactLimit) / 1e18;
+const processVault = async (auth, networkId) => {
+  // Get the current vault gas price, round, and round end time
+  const [gasPrice, round, roundEndTime, closingDate] =
+    await setOptimismVariables(VaultContract);
 
-  console.log("Processing vault...");
-  let gasp = await constants.etherprovider.getGasPrice();
-  const round = await VaultContract.round();
-  const roundEndTime = (await VaultContract.getCurrentRoundEnd()).toString();
-  let closingDate = new Date(roundEndTime * 1000.0).getTime();
-
-  console.log(
-    `Vault Information... Round: ${round}, Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit}  `
-  );
-
-  await testTrade(
+  // Test trades for each market
+  await evaluateMarkets(
     priceLowerLimit,
     priceUpperLimit,
     skewImpactLimit,
     round,
     closingDate,
-    gasp
+    gasPrice
+  );
+  // Write the data to a file
+  fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
+};
+
+const setNetworkVariables = async (networkId = "10") => {
+  if (networkId == "10") {
+    const wallet = new ethers.Wallet(
+      constants.privateKey,
+      constants.etherprovider
+    );
+    const thalesAMMContract = new ethers.Contract(
+      process.env.THALES_AMM_CONTRACT,
+      ThalesAMM.thalesAMMContract.abi,
+      wallet
+    );
+    const VaultContract = new ethers.Contract(
+      process.env.AMM_VAULT_CONTRACT,
+      Vault.vaultContract.abi,
+      wallet
+    );
+    const positionalContractAddress =
+      process.env.POSITIONAL_MARKET_DATA_CONTRACT;
+    const networkId = process.env.NETWORK_ID;
+    return {
+      thalesAMMContract,
+      VaultContract,
+      positionalContractAddress,
+      networkId,
+    };
+  } else if (networkId == "56") {
+    const wallet = new ethers.Wallet(
+      constants.privateKey,
+      constants.bscProvider
+    );
+    const thalesAMMContract = new ethers.Contract(
+      process.env.BSC_THALES_AMM_CONTRACT,
+      ThalesAMM.thalesAMMContract.abi,
+      wallet
+    );
+    const VaultContract = new ethers.Contract(
+      process.env.BSC_AMM_VAULT_CONTRACT,
+      Vault.vaultContract.abi,
+      wallet
+    );
+    const positionalContractAddress =
+      process.env.BSC_POSITIONAL_MARKET_DATA_CONTRACT;
+    const networkId = process.env.BSC_NETWORK_ID;
+    return {
+      thalesAMMContract,
+      VaultContract,
+      positionalContractAddress,
+      networkId,
+    };
+  } else if (networkId == "42161") {
+    const wallet = new ethers.Wallet(
+      constants.privateKey,
+      constants.arbitrumProvider
+    );
+    const thalesAMMContract = new ethers.Contract(
+      process.env.ARBITRUM_THALES_AMM_CONTRACT,
+      ThalesAMM.thalesAMMContract.abi,
+      wallet
+    );
+    const VaultContract = new ethers.Contract(
+      process.env.ARBITRUM_AMM_VAULT_CONTRACT,
+      Vault.vaultContract.abi,
+      wallet
+    );
+    const positionalContractAddress =
+      process.env.ARBITRUM_POSITIONAL_MARKET_DATA_CONTRACT;
+    const networkId = process.env.ARBITRUM_NETWORK_ID;
+    return {
+      thalesAMMContract,
+      VaultContract,
+      positionalContractAddress,
+      networkId,
+    };
+  } else {
+    throw new Error("Network ID not recognized");
+  }
+};
+
+const setOptimismVariables = async (contract) => {
+  const [gasPrice, round, roundEndTime] = await Promise.all([
+    // contract.gasPrice(),
+    1000000,
+    contract.round(),
+    contract.roundEndTime(),
+  ]);
+  const closingDate = new Date(roundEndTime * 1000.0).getTime();
+  console.log(
+    `Vault Information... Round: ${round}, Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit}  `
+  );
+  return { gasPrice, round, roundEndTime, closingDate };
+};
+
+const getLocalVariables = (data) => {
+  const priceUpperLimit = data.priceUpperLimit;
+  const priceLowerLimit = data.priceLowerLimit;
+  const skewImpactLimit = data.skewImpactLimit;
+
+  return {
+    priceUpperLimit,
+    priceLowerLimit,
+    skewImpactLimit,
+  };
+};
+
+const evaluateMarkets = async (
+  priceLowerLimit,
+  priceUpperLimit,
+  skewImpactLimit,
+  round,
+  roundEndTime,
+  gasp
+) => {
+  let tradingMarkets = await marketschecker.processMarkets(
+    priceLowerLimit,
+    priceUpperLimit,
+    roundEndTime,
+    skewImpactLimit,
+    wallet,
+    positionalContractAddress,
+    PositionalMarketDataContract,
+    networkId
   );
 
-  console.log("Processing vault complete.");
-  fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
-}
+  for (const key in tradingMarkets) {
+    let market = tradingMarkets[key];
+    console.log(
+      `--------------------Processing ${market.currencyKey} ${
+        market.position > 0 ? "DOWN" : "UP"
+      } at ${market.address}-------------------`
+    );
+
+    // Check if this market has already been traded in this round. Returns true or false.
+    let tradedInRoundAlready;
+    let tradedBeforePosition;
+    for (const key in data.tradedInRoundAlready[round]) {
+      if (market.address == data.tradedInRoundAlready[round][key]) {
+        tradedInRoundAlready = true;
+        tradedBeforePosition =
+          data.tradingMarketPositionPerRound[round][market.address];
+        console.log(
+          `Previous Position: ${
+            tradedBeforePosition > 0 ? "DOWN" : "UP"
+          } (${tradedBeforePosition})`
+        );
+        if (tradedBeforePosition != market.position) {
+          console.log(
+            "Market already traded in round, but with different position. Skipping"
+          );
+          continue;
+        }
+      } else {
+        tradedInRoundAlready = false;
+      }
+    }
+
+    // Evaluate the amount to buy according to Skew Impact. Returns an object with amount, quote and position.
+    let result = await amountToBuy(market, round, skewImpactLimit);
+
+    if (result.amount > 0) {
+      console.log(
+        `Executing order to buy ${result.amount} ${
+          market.position > 0 ? "DOWN" : "UP"
+        }s ($${result.quote.toFixed(2)}) of ${market.currencyKey} at ${
+          market.address
+        }`
+      );
+      await executeTrade(market, result, round, gasp);
+    } else {
+      console.log(
+        `No trade made for ${market.currencyKey} ${
+          market.position > 0 ? "DOWN" : "UP"
+        } at ${market.address}`
+      );
+    }
+  }
+};
 
 async function amountToBuy(market, round, skewImpactLimit) {
   // Get the minimum trade amount (in UPs or DOWNs - usually 3)
@@ -173,79 +334,6 @@ async function amountToBuy(market, round, skewImpactLimit) {
   return { amount: finalAmount, quote: finalQuote, position: market.position };
 }
 
-async function testTrade(
-  priceLowerLimit,
-  priceUpperLimit,
-  skewImpactLimit,
-  round,
-  roundEndTime,
-  gasp
-) {
-  let tradingMarkets = await marketschecker.processMarkets(
-    priceLowerLimit,
-    priceUpperLimit,
-    roundEndTime,
-    skewImpactLimit,
-    wallet,
-    positionalContractAddress,
-    PositionalMarketDataContract,
-    networkId
-  );
-
-  for (const key in tradingMarkets) {
-    let market = tradingMarkets[key];
-    console.log(
-      `--------------------Processing ${market.currencyKey} ${
-        market.position > 0 ? "DOWN" : "UP"
-      } at ${market.address}-------------------`
-    );
-
-    // Check if this market has already been traded in this round. Returns true or false.
-    let tradedInRoundAlready;
-    let tradedBeforePosition;
-    for (const key in data.tradedInRoundAlready[round]) {
-      if (market.address == data.tradedInRoundAlready[round][key]) {
-        tradedInRoundAlready = true;
-        tradedBeforePosition =
-          data.tradingMarketPositionPerRound[round][market.address];
-        console.log(
-          `Previous Position: ${
-            tradedBeforePosition > 0 ? "DOWN" : "UP"
-          } (${tradedBeforePosition})`
-        );
-        if (tradedBeforePosition != market.position) {
-          console.log(
-            "Market already traded in round, but with different position. Skipping"
-          );
-          continue;
-        }
-      } else {
-        tradedInRoundAlready = false;
-      }
-    }
-
-    // Evaluate the amount to buy according to Skew Impact. Returns an object with amount, quote and position.
-    let result = await amountToBuy(market, round, skewImpactLimit);
-
-    if (result.amount > 0) {
-      console.log(
-        `Executing order to buy ${result.amount} ${
-          market.position > 0 ? "DOWN" : "UP"
-        }s ($${result.quote.toFixed(2)}) of ${market.currencyKey} at ${
-          market.address
-        }`
-      );
-      await executeTrade(market, result, round, gasp);
-    } else {
-      console.log(
-        `No trade made for ${market.currencyKey} ${
-          market.position > 0 ? "DOWN" : "UP"
-        } at ${market.address}`
-      );
-    }
-  }
-}
-
 async function executeTrade(market, result, round, gasp) {
   // market { address: '0xc1af77a1efea7326df378af9195306f0a3094f51', position: 1, currencyKey: 'LINK', price: 0.8111760272895937 }
   //result { amount: '494', quote: 406.5630697385673, position: 1 }
@@ -346,4 +434,10 @@ async function executeTrade(market, result, round, gasp) {
 
 module.exports = {
   processVault,
+  setOptimism,
+  setOptimismVariables,
+  getLocalVariables,
+  evaluateMarkets,
+  amountToBuy,
+  executeTrade,
 };
