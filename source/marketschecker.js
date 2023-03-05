@@ -34,7 +34,7 @@ async function processMarkets(
   let minMaturityValue = parseInt(new Date().getTime() / 1000);
   let positionalMarkets = await thalesData.binaryOptions.markets({
     max: Infinity,
-    network: process.env.NETWORK_ID,
+    network: +networkId,
     minMaturity: minMaturityValue,
   });
 
@@ -44,14 +44,29 @@ async function processMarkets(
     wallet
   );
 
-  const [pricesForAllActiveMarkets, priceImpactForAllActiveMarkets] =
-    await Promise.all([
-      positionalMarketDataContract.getBasePricesForAllActiveMarkets(),
-      positionalMarketDataContract.getPriceImpactForAllActiveMarkets(),
-    ]);
+  let [pricesForAllActiveMarkets, priceImpactForAllActiveMarkets] = [];
+  if (+networkId == 10) {
+    [pricesForAllActiveMarkets, priceImpactForAllActiveMarkets] =
+      await Promise.all([
+        positionalMarketDataContract.getBasePricesForAllActiveMarkets(),
+        positionalMarketDataContract.getPriceImpactForAllActiveMarkets(),
+      ]);
+  } else if (+networkId == 42161 || +networkId == 56) {
+    [pricesForAllActiveMarkets, priceImpactForAllActiveMarkets] =
+      await Promise.all([
+        positionalMarketDataContract.getPricesForAllActiveMarkets(),
+        positionalMarketDataContract.getPriceImpactForAllActiveMarkets(),
+      ]);
+  }
+
+  // console.log("pricesForAllActiveMarkets: " + pricesForAllActiveMarkets);
+  // console.log(
+  //   "priceImpactForAllActiveMarkets: " + priceImpactForAllActiveMarkets
+  // );
 
   console.log("Processing a total of " + positionalMarkets.length + " markets");
   let i = 0;
+
   /* *
     Process individual markets
       Schema:  {
@@ -83,6 +98,15 @@ async function processMarkets(
       (priceImpact) => priceImpact.market.toLowerCase() === market.address
     );
 
+    // console.log(
+    //   `Market: ${market.address} - ${
+    //     market.currencyKey
+    //   } - MarketPrices: ${marketPrices} MarketPriceImpact- ${marketPriceImpact} - IntradingWeek: ${inTradingWeek(
+    //     market.maturityDate,
+    //     roundEndTime
+    //   )}`
+    // );
+
     if (
       inTradingWeek(market.maturityDate, roundEndTime) &&
       marketPrices &&
@@ -99,11 +123,30 @@ async function processMarkets(
           buyPriceImpactUP >= skewImpactLimit &&
           buyPriceImpactDOWN >= skewImpactLimit
         ) {
+          // console.log(
+          //   `Market: ${market.address} - ${market.currencyKey} - Skew Impact too high`
+          // );
           continue;
         }
 
-        let priceUP = marketPrices.upPrice / 1e18;
-        let priceDOWN = marketPrices.downPrice / 1e18;
+        let priceUP, priceDOWN;
+
+        if (+networkId == 10 || +networkId == 56) {
+          priceUP = marketPrices.upPrice / 1e18;
+          priceDOWN = marketPrices.downPrice / 1e18;
+        } else if (+networkId == 42161 || +networkId == 56) {
+          priceUP = marketPrices.upPrice / 1e6;
+          priceDOWN = marketPrices.downPrice / 1e6;
+        }
+
+        // console.log(
+        //   `Market: ${market.address} - ${
+        //     market.currencyKey
+        //   } - UP: ${priceUP} - Impact UP: ${buyPriceImpactUP} - DOWN: ${priceDOWN} - Impact DOWN: ${buyPriceImpactDOWN} - IntradingWeek: ${inTradingWeek(
+        //     market.maturityDate,
+        //     roundEndTime
+        //   )}`
+        // );
         if (
           priceUP > priceLowerLimit &&
           priceUP < priceUpperLimit &&

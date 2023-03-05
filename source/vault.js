@@ -279,13 +279,9 @@ async function executeTrade(market, result, round, gasp) {
 
       if (tradedInRoundAlready) {
         console.log(
-          `Market already traded in round with same position. Skipping`
+          `Market already traded in round with same position. Skipping until I fix the log issue`
         );
         return;
-      } else {
-        data.tradedInRoundAlready[round].push(market.address);
-        data.tradingMarketPositionPerRound[round][market.address] =
-          market.position;
       }
 
       // Execute trade
@@ -311,35 +307,59 @@ async function executeTrade(market, result, round, gasp) {
       data.tradeLog.push(tradeLog);
       // Log the details of the trade (quantity, price, market address, etc.) and save to data
 
-      data.tradingMarketPositionPerRound[round][market.address] =
-        market.position.toString();
-      let newAllowance;
-      // if availableAllocationPerMarket has a balance, subtract the amount traded from it.
-      let availableAllocationPerMarket =
-        BigInt(data.tradingAllocation) / BigInt(20);
+      // if the round hasnt been created yet, create it
+      if (!data.tradedInRoundAlready[round]) {
+        console.log("tradedInRoundAlready is empty");
+        data.tradedInRoundAlready[round] = [];
+      }
+      if (!data.tradingMarketPositionPerRound[round]) {
+        console.log("tradingMarketPositionPerRound is empty");
+        data.tradingMarketPositionPerRound[round] = {};
+      }
+      if (!data.availableAllocationPerMarket[round]) {
+        console.log("availableAllocationPerMarket is empty");
+        data.availableAllocationPerMarket[round] = {};
+      }
+
+      // if the market hasnt been created yet, create it
+      if (!data.tradedInRoundAlready[round].includes(market.address)) {
+        data.tradedInRoundAlready[round].push(market.address);
+        console.log(`Pushed ${market.address} to tradedInRoundAlready`);
+      }
+      if (!data.tradingMarketPositionPerRound[round][market.address]) {
+        data.tradingMarketPositionPerRound[round][market.address] =
+          market.position.toString();
+        console.log(
+          `Pushed ${market.position} to tradingMarketPositionPerRound`
+        );
+      }
       if (data.availableAllocationPerMarket[round][market.address]) {
         let priorAllowance = BigInt(
           data.availableAllocationPerMarket[round][market.address]
         );
-        newAllowance = priorAllowance - BigInt(w3utils.toWei(result.quote));
-        // update the newAllowance to replace the old one in the data object
+        let newAllowance = priorAllowance - BigInt(w3utils.toWei(result.quote));
         data.availableAllocationPerMarket[round][market.address] =
           newAllowance.toString();
-      } else {
-        // If not, set it to tradingAllocation - amount quoted.
-        data.tradedInRoundAlready[round].push(market.address);
-        newAllowance =
-          availableAllocationPerMarket - BigInt(w3utils.toWei(result.quote));
+        console.log(
+          `Pushed ${
+            newAllowance / BigInt(1e18)
+          } to availableAllocationPerMarket`
+        );
+      } else if (!data.availableAllocationPerMarket[round][market.address]) {
+        let newAllowance =
+          BigInt(data.tradingAllocation) / BigInt(20) -
+          BigInt(w3utils.toWei(result.quote));
         data.availableAllocationPerMarket[round][market.address] =
           newAllowance.toString();
+        console.log(
+          `Pushed ${
+            newAllowance / BigInt(1e18)
+          } to availableAllocationPerMarket`
+        );
       }
-      console.log(
-        `New allowance for ${market.address} is ${newAllowance} ($${
-          newAllowance / BigInt(1e18)
-        })`
-      );
     } catch (e) {
-      console.log(e.message);
+      console.log(e);
+      data.errorLog.push(e);
     }
   }
 }

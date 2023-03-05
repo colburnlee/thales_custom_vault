@@ -5,6 +5,7 @@ const process = require("process");
 const { authenticate } = require("@google-cloud/local-auth");
 const { google } = require("googleapis");
 
+const personalVault = require("./source/thalesVault.js");
 const vault = require("./source/vault.js");
 const artbitrumVault = require("./source/arbitrumVault.js");
 const bscVault = require("./source/bscVault.js");
@@ -87,24 +88,24 @@ async function doMain(auth) {
   console.log(
     "==================== START PROCESSING OP VAULT ===================="
   );
-  await vault.processVault(auth);
+  await personalVault.processVault(auth, "10");
   console.log(
     "==================== END PROCESSING OP VAULT ===================="
   );
   // console.log(
   //   "==================== START PROCESSING ARBITRUM VAULT ===================="
   // );
-  //   await artbitrumVault.processVault(auth);
-  //   console.log(
-  //     "==================== END PROCESSING ARBITRUM VAULT ===================="
-  //   );
-  //   console.log(
-  //     "==================== START PROCESSING BSC VAULT ===================="
-  //   );
-  //   await bscVault.processVault(auth);
-  //   console.log(
-  //     "==================== END PROCESSING BSC VAULT ===================="
-  //   );
+  // await personalVault.processVault(auth, "42161");
+  // console.log(
+  //   "==================== END PROCESSING ARBITRUM VAULT ===================="
+  // );
+  // console.log(
+  //   "==================== START PROCESSING BSC VAULT ===================="
+  // );
+  // await personalVault.processVault(auth, "56");
+  // console.log(
+  //   "==================== END PROCESSING BSC VAULT ===================="
+  // );
 }
 
 doLoop();

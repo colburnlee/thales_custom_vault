@@ -4,28 +4,22 @@ const ethers = require("ethers");
 const w3utils = require("web3-utils");
 const Vault = require("../contracts/Vault.js");
 const ThalesAMM = require("../contracts/ThalesAMM.js");
-const PositionalMarketDataContract = require("../contracts/PositionalMarketData.js");
+// const PositionalMarketDataContract = require("../contracts/PositionalMarketData.js");
 const marketschecker = require("./marketschecker.js");
-const data = require("../data.json");
 const fs = require("fs");
 
-// Set the OP Wallet and Vault Contract Information
-const {
-  thalesAMMContract,
-  VaultContract,
-  positionalContractAddress,
-  networkId,
-} = await setNetworkVariables();
-
+const data = require("../data.json");
 // Pull in local data - priceUpperLimit, priceLowerLimit, skewImpactLimit
-const { priceUpperLimit, priceLowerLimit, skewImpactLimit } =
-  getLocalVariables(data);
+const priceUpperLimit = Number(data.priceUpperLimit) / 1e18;
+const priceLowerLimit = Number(data.priceLowerLimit) / 1e18;
+const skewImpactLimit = Number(data.skewImpactLimit) / 1e18;
 
+//
+//
+//
 const processVault = async (auth, networkId) => {
-  // Get the current vault gas price, round, and round end time
-  const [round, roundEndTime, closingDate] = await setOptimismVariables(
-    VaultContract
-  );
+  // Get the current vault round information from Optimism
+  const { round, roundEndTime, closingDate } = await setOptimismVariables();
 
   // Test trades for each market
   await evaluateMarkets(
@@ -51,19 +45,16 @@ const setNetworkVariables = async (networkId = "10") => {
       ThalesAMM.thalesAMMContract.abi,
       wallet
     );
-    const VaultContract = new ethers.Contract(
-      process.env.AMM_VAULT_CONTRACT,
-      Vault.vaultContract.abi,
-      wallet
-    );
     const positionalContractAddress =
       process.env.POSITIONAL_MARKET_DATA_CONTRACT;
-    const networkId = process.env.NETWORK_ID;
+    const PositionalMarketDataContract = require("../contracts/PositionalMarketData.js");
+    const gasPrice = await constants.etherprovider.getGasPrice();
     return {
+      wallet,
       thalesAMMContract,
-      VaultContract,
       positionalContractAddress,
-      networkId,
+      PositionalMarketDataContract,
+      gasPrice,
     };
   } else if (networkId == "56") {
     const wallet = new ethers.Wallet(
@@ -75,19 +66,16 @@ const setNetworkVariables = async (networkId = "10") => {
       ThalesAMM.thalesAMMContract.abi,
       wallet
     );
-    const VaultContract = new ethers.Contract(
-      process.env.BSC_AMM_VAULT_CONTRACT,
-      Vault.vaultContract.abi,
-      wallet
-    );
     const positionalContractAddress =
       process.env.BSC_POSITIONAL_MARKET_DATA_CONTRACT;
-    const networkId = process.env.BSC_NETWORK_ID;
+    const PositionalMarketDataContract = require("../contracts/ArbitrumPositionalMarketData.js");
+    const gasPrice = await constants.bscProvider.getGasPrice();
     return {
+      wallet,
       thalesAMMContract,
-      VaultContract,
       positionalContractAddress,
-      networkId,
+      PositionalMarketDataContract,
+      gasPrice,
     };
   } else if (networkId == "42161") {
     const wallet = new ethers.Wallet(
@@ -99,48 +87,39 @@ const setNetworkVariables = async (networkId = "10") => {
       ThalesAMM.thalesAMMContract.abi,
       wallet
     );
-    const VaultContract = new ethers.Contract(
-      process.env.ARBITRUM_AMM_VAULT_CONTRACT,
-      Vault.vaultContract.abi,
-      wallet
-    );
     const positionalContractAddress =
       process.env.ARBITRUM_POSITIONAL_MARKET_DATA_CONTRACT;
-    const networkId = process.env.ARBITRUM_NETWORK_ID;
+    const PositionalMarketDataContract = require("../contracts/ArbitrumPositionalMarketData.js");
+    const gasPrice = await constants.arbitrumProvider.getGasPrice();
     return {
+      wallet,
       thalesAMMContract,
-      VaultContract,
       positionalContractAddress,
-      networkId,
+      PositionalMarketDataContract,
+      gasPrice,
     };
   } else {
     throw new Error("Network ID not recognized");
   }
 };
 
-const setOptimismVariables = async (contract) => {
-  const [gasPrice, round, roundEndTime] = await Promise.all([
-    contract.gasPrice(),
-    contract.round(),
-    contract.roundEndTime(),
-  ]);
-  const closingDate = new Date(roundEndTime * 1000.0).getTime();
-  console.log(
-    `Vault Information... Round: ${round}, Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit}  `
+const setOptimismVariables = async () => {
+  const wallet = new ethers.Wallet(
+    constants.privateKey,
+    constants.etherprovider
   );
-  return { gasPrice, round, roundEndTime, closingDate };
-};
-
-const getLocalVariables = (data) => {
-  const priceUpperLimit = data.priceUpperLimit;
-  const priceLowerLimit = data.priceLowerLimit;
-  const skewImpactLimit = data.skewImpactLimit;
-
-  return {
-    priceUpperLimit,
-    priceLowerLimit,
-    skewImpactLimit,
-  };
+  const contract = new ethers.Contract(
+    process.env.AMM_VAULT_CONTRACT,
+    Vault.vaultContract.abi,
+    wallet
+  );
+  const round = await contract.round();
+  const roundEndTime = (await contract.getCurrentRoundEnd()).toString();
+  let closingDate = new Date(roundEndTime * 1000.0).getTime();
+  console.log(
+    `Vault Information... Round: ${round}, Round End Time: ${roundEndTime}, Closing Date: ${closingDate} Price Upper Limit: ${priceUpperLimit}, Price Lower Limit: ${priceLowerLimit}, Skew Impact Limit: ${skewImpactLimit}  `
+  );
+  return { round, roundEndTime, closingDate };
 };
 
 // TODO: Make wallet, positionalContractAddress, PositionalMarketDataContract, networkId variables tied to the networkId in processVault
@@ -152,13 +131,15 @@ const evaluateMarkets = async (
   roundEndTime,
   networkId
 ) => {
+  // Set the network variables based on the networkId. Will pass to marketschecker
   const {
     wallet,
+    thalesAMMContract,
     positionalContractAddress,
     PositionalMarketDataContract,
-    networkId,
+    gasPrice: gasp,
   } = await setNetworkVariables(networkId);
-  const gasp = await wallet.getGasPrice();
+
   let tradingMarkets = await marketschecker.processMarkets(
     priceLowerLimit,
     priceUpperLimit,
@@ -203,7 +184,13 @@ const evaluateMarkets = async (
     }
 
     // Evaluate the amount to buy according to Skew Impact. Returns an object with amount, quote and position.
-    let result = await amountToBuy(market, round, skewImpactLimit);
+    let result = await amountToBuy(
+      market,
+      round,
+      skewImpactLimit,
+      thalesAMMContract,
+      networkId
+    );
 
     if (result.amount > 0) {
       console.log(
@@ -213,7 +200,7 @@ const evaluateMarkets = async (
           market.address
         }`
       );
-      await executeTrade(market, result, round, gasp);
+      await executeTrade(market, result, round, gasp, thalesAMMContract);
     } else {
       console.log(
         `No trade made for ${market.currencyKey} ${
@@ -224,21 +211,28 @@ const evaluateMarkets = async (
   }
 };
 
-async function amountToBuy(market, round, skewImpactLimit) {
+async function amountToBuy(
+  market,
+  round,
+  skewImpactLimit,
+  contract,
+  networkId
+) {
+  let decimals = 1e18;
+  if (networkId == "42161") {
+    decimals = 1e6;
+  }
+
   // Get the minimum trade amount (in UPs or DOWNs - usually 3)
   const minTradeAmount = Number(data.minTradeAmount) / 1e18;
+
   let finalAmount = 0,
-    quote = 0,
-    step = 10;
-  // step = minTradeAmount;
-  // finalQuote = 0
+    quote = 0;
 
   // Lists the maximum amount of tokens that can be bought from the AMM in a position direction (0=UP, 1=DOWN)
   const maxAmmAmount =
-    (await thalesAMMContract.availableToBuyFromAMM(
-      market.address,
-      market.position
-    )) / 1e18;
+    (await contract.availableToBuyFromAMM(market.address, market.position)) /
+    1e18;
 
   // Get the available allocation for this market in this round
   const availableAllocationForRound = Number(data.tradingAllocation) / 1e18;
@@ -265,7 +259,7 @@ async function amountToBuy(market, round, skewImpactLimit) {
   }
   while (amount < maxAmmAmount) {
     let skewImpact =
-      (await thalesAMMContract.buyPriceImpact(
+      (await contract.buyPriceImpact(
         market.address,
         market.position,
         w3utils.toWei(amount.toString())
@@ -286,11 +280,11 @@ async function amountToBuy(market, round, skewImpactLimit) {
 
   // Get the quote for the amount of tokens to buy. If the quote is over the max allocation, then reduce the amount to buy
   quote =
-    (await thalesAMMContract.buyFromAmmQuote(
+    (await contract.buyFromAmmQuote(
       market.address,
       market.position,
       w3utils.toWei(amount.toString())
-    )) / 1e18;
+    )) / decimals;
   console.log(
     `${amount} ${market.currencyKey} ${
       market.position > 0 ? "DOWN" : "UP"
@@ -311,11 +305,11 @@ async function amountToBuy(market, round, skewImpactLimit) {
         ? minTradeAmount
         : Math.floor(amount * 0.99);
     quote =
-      (await thalesAMMContract.buyFromAmmQuote(
+      (await contract.buyFromAmmQuote(
         market.address,
         market.position,
         w3utils.toWei(amount.toString())
-      )) / 1e18;
+      )) / decimals;
     console.log(
       `New quote: $${quote.toFixed(2)} for ${amount} ${market.currencyKey} ${
         market.position > 0 ? "DOWN" : "UP"
@@ -325,11 +319,11 @@ async function amountToBuy(market, round, skewImpactLimit) {
   finalAmount = amount.toFixed(0);
 
   finalQuote =
-    (await thalesAMMContract.buyFromAmmQuote(
+    (await contract.buyFromAmmQuote(
       market.address,
       market.position,
       w3utils.toWei(finalAmount.toString())
-    )) / 1e18;
+    )) / decimals;
   console.log(
     `Quoted Price: $${finalQuote.toFixed(
       2
@@ -342,7 +336,7 @@ async function amountToBuy(market, round, skewImpactLimit) {
   return { amount: finalAmount, quote: finalQuote, position: market.position };
 }
 
-async function executeTrade(market, result, round, gasp) {
+async function executeTrade(market, result, round, gasp, contract) {
   // market { address: '0xc1af77a1efea7326df378af9195306f0a3094f51', position: 1, currencyKey: 'LINK', price: 0.8111760272895937 }
   //result { amount: '494', quote: 406.5630697385673, position: 1 }
   // slippage: "5000000000000000"
@@ -375,17 +369,13 @@ async function executeTrade(market, result, round, gasp) {
 
       if (tradedInRoundAlready) {
         console.log(
-          `Market already traded in round with same position. Skipping`
+          `Market already traded in round with same position. Skipping until I fix the log issue`
         );
         return;
-      } else {
-        data.tradedInRoundAlready[round].push(market.address);
-        data.tradingMarketPositionPerRound[round][market.address] =
-          market.position;
       }
 
       // Execute trade
-      let tx = await thalesAMMContract.buyFromAMM(
+      let tx = await contract.buyFromAMM(
         market.address,
         market.position,
         w3utils.toWei(result.amount.toString()),
@@ -407,44 +397,66 @@ async function executeTrade(market, result, round, gasp) {
       data.tradeLog.push(tradeLog);
       // Log the details of the trade (quantity, price, market address, etc.) and save to data
 
-      data.tradingMarketPositionPerRound[round][market.address] =
-        market.position.toString();
-      let newAllowance;
-      // if availableAllocationPerMarket has a balance, subtract the amount traded from it.
-      let availableAllocationPerMarket =
-        BigInt(data.tradingAllocation) / BigInt(20);
+      // if the round hasnt been created yet, create it
+      if (!data.tradedInRoundAlready[round]) {
+        console.log("tradedInRoundAlready is empty");
+        data.tradedInRoundAlready[round] = [];
+      }
+      if (!data.tradingMarketPositionPerRound[round]) {
+        console.log("tradingMarketPositionPerRound is empty");
+        data.tradingMarketPositionPerRound[round] = {};
+      }
+      if (!data.availableAllocationPerMarket[round]) {
+        console.log("availableAllocationPerMarket is empty");
+        data.availableAllocationPerMarket[round] = {};
+      }
+
+      // if the market hasnt been created yet, create it
+      if (!data.tradedInRoundAlready[round].includes(market.address)) {
+        data.tradedInRoundAlready[round].push(market.address);
+        console.log(`Pushed ${market.address} to tradedInRoundAlready`);
+      }
+      if (!data.tradingMarketPositionPerRound[round][market.address]) {
+        data.tradingMarketPositionPerRound[round][market.address] =
+          market.position.toString();
+        console.log(
+          `Pushed ${market.position} to tradingMarketPositionPerRound`
+        );
+      }
       if (data.availableAllocationPerMarket[round][market.address]) {
         let priorAllowance = BigInt(
           data.availableAllocationPerMarket[round][market.address]
         );
-        newAllowance = priorAllowance - BigInt(w3utils.toWei(result.quote));
-        // update the newAllowance to replace the old one in the data object
+        let newAllowance = priorAllowance - BigInt(w3utils.toWei(result.quote));
         data.availableAllocationPerMarket[round][market.address] =
           newAllowance.toString();
-      } else {
-        // If not, set it to tradingAllocation - amount quoted.
-        data.tradedInRoundAlready[round].push(market.address);
-        newAllowance =
-          availableAllocationPerMarket - BigInt(w3utils.toWei(result.quote));
+        console.log(
+          `Pushed ${
+            newAllowance / BigInt(1e18)
+          } to availableAllocationPerMarket`
+        );
+      } else if (!data.availableAllocationPerMarket[round][market.address]) {
+        let newAllowance =
+          BigInt(data.tradingAllocation) / BigInt(20) -
+          BigInt(w3utils.toWei(result.quote));
         data.availableAllocationPerMarket[round][market.address] =
           newAllowance.toString();
+        console.log(
+          `Pushed ${
+            newAllowance / BigInt(1e18)
+          } to availableAllocationPerMarket`
+        );
       }
-      console.log(
-        `New allowance for ${market.address} is ${newAllowance} ($${
-          newAllowance / BigInt(1e18)
-        })`
-      );
     } catch (e) {
-      console.log(e.message);
+      console.log(e);
+      data.errorLog.push(e.reason);
     }
   }
 }
 
 module.exports = {
   processVault,
-  setOptimism,
   setOptimismVariables,
-  getLocalVariables,
   evaluateMarkets,
   amountToBuy,
   executeTrade,
