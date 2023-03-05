@@ -14,9 +14,7 @@ const priceUpperLimit = Number(data.priceUpperLimit) / 1e18;
 const priceLowerLimit = Number(data.priceLowerLimit) / 1e18;
 const skewImpactLimit = Number(data.skewImpactLimit) / 1e18;
 
-//
-//
-//
+///////////////// Main function ///////////////////////
 const processVault = async (auth, networkId) => {
   // Get the current vault round information from Optimism
   const { round, roundEndTime, closingDate } = await setOptimismVariables();
@@ -31,6 +29,7 @@ const processVault = async (auth, networkId) => {
     networkId
   );
   // Write the data to a file
+  console.log("Writing data to file");
   fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 };
 
@@ -122,7 +121,6 @@ const setOptimismVariables = async () => {
   return { round, roundEndTime, closingDate };
 };
 
-// TODO: Make wallet, positionalContractAddress, PositionalMarketDataContract, networkId variables tied to the networkId in processVault
 const evaluateMarkets = async (
   priceLowerLimit,
   priceUpperLimit,
@@ -385,13 +383,14 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
       }
 
       // Execute trade
+      // Note I changed position from market to result (and string), and I changed gas values to strings
       let tx = await contract.buyFromAMM(
         market.address,
-        market.position,
+        result.position.toString(),
         w3utils.toWei(result.amount.toString()),
         w3utils.toWei(result.quote.toString()),
         "2500000000000000",
-        { gasLimit: 10000000, gasPrice: gasp.add(gasp.div(5)) }
+        { gasLimit: "10000000", gasPrice: gasp.add(gasp.div(5)).toString() }
       );
       let reciept = await tx.wait();
       let transactionHash = reciept.transactionHash;
@@ -403,7 +402,7 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
         round: round.toString(),
         currencyKey: market.currencyKey,
         market: market.address,
-        position: market.position > 0 ? "DOWN" : "UP",
+        position: result.position > 0 ? "DOWN" : "UP",
         amount: result.amount,
         quote: result.quote,
         timestamp: timestamp,

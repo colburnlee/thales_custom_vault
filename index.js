@@ -6,9 +6,6 @@ const { authenticate } = require("@google-cloud/local-auth");
 const { google } = require("googleapis");
 
 const personalVault = require("./source/thalesVault.js");
-const vault = require("./source/vault.js");
-const artbitrumVault = require("./source/arbitrumVault.js");
-const bscVault = require("./source/bscVault.js");
 
 // If modifying these scopes, delete token.json.
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
