@@ -200,7 +200,14 @@ const evaluateMarkets = async (
           market.address
         }`
       );
-      await executeTrade(market, result, round, gasp, thalesAMMContract);
+      await executeTrade(
+        market,
+        result,
+        round,
+        gasp,
+        thalesAMMContract,
+        networkId
+      );
     } else {
       console.log(
         `No trade made for ${market.currencyKey} ${
@@ -336,10 +343,13 @@ async function amountToBuy(
   return { amount: finalAmount, quote: finalQuote, position: market.position };
 }
 
-async function executeTrade(market, result, round, gasp, contract) {
+async function executeTrade(market, result, round, gasp, contract, networkId) {
   // market { address: '0xc1af77a1efea7326df378af9195306f0a3094f51', position: 1, currencyKey: 'LINK', price: 0.8111760272895937 }
   //result { amount: '494', quote: 406.5630697385673, position: 1 }
   // slippage: "5000000000000000"
+
+  let network =
+    networkId == "42161" ? "arbitrum" : networkId == "56" ? "bsc" : "optimism";
 
   if (result.amount > 0) {
     try {
@@ -386,12 +396,17 @@ async function executeTrade(market, result, round, gasp, contract) {
       let reciept = await tx.wait();
       let transactionHash = reciept.transactionHash;
       console.log(`Transaction hash: ${transactionHash}`);
+      let timestamp = new Date().toISOString();
       // Create a log of the trade
       let tradeLog = {
+        network: network,
+        round: round.toString(),
+        currencyKey: market.currencyKey,
         market: market.address,
-        position: market.position,
+        position: market.position > 0 ? "DOWN" : "UP",
         amount: result.amount,
         quote: result.quote,
+        timestamp: timestamp,
         transactionHash: transactionHash,
       };
       data.tradeLog.push(tradeLog);
@@ -448,8 +463,21 @@ async function executeTrade(market, result, round, gasp, contract) {
         );
       }
     } catch (e) {
-      console.log(e);
-      data.errorLog.push(e.reason);
+      let error = e.reason ? e.reason : e.message;
+      let timestamp = new Date().toISOString();
+      let errorMessage = {
+        network: network,
+        round: round.toString(),
+        currencyKey: market.currencyKey,
+        market: market.address,
+        position: market.position > 0 ? "DOWN" : "UP",
+        amount: result.amount,
+        quote: result.quote,
+        error: error,
+        timestamp: timestamp,
+      };
+      console.log(error);
+      data.errorLog.push(errorMessage);
     }
   }
 }
