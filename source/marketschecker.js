@@ -51,22 +51,23 @@ async function processMarkets(
         positionalMarketDataContract.getBasePricesForAllActiveMarkets(),
         positionalMarketDataContract.getPriceImpactForAllActiveMarkets(),
       ]);
-  } else if (+networkId == 42161 || +networkId == 56) {
+  } else if (+networkId == 42161 || +networkId == 56 || +networkId == 137) {
     [pricesForAllActiveMarkets, priceImpactForAllActiveMarkets] =
       await Promise.all([
         positionalMarketDataContract.getPricesForAllActiveMarkets(),
         positionalMarketDataContract.getPriceImpactForAllActiveMarkets(),
       ]);
   }
-
   // console.log("pricesForAllActiveMarkets: " + pricesForAllActiveMarkets);
-  // console.log(
-  //   "priceImpactForAllActiveMarkets: " + priceImpactForAllActiveMarkets
-  // );
+  //     console.log(
+  //       "priceImpactForAllActiveMarkets: " + priceImpactForAllActiveMarkets
+  //     );
 
-  console.log("Processing a total of " + positionalMarkets.length + " markets");
+  //     console.log(
+  //       "Processing a total of " + positionalMarkets.length + " markets"
+  //     );
+
   let i = 0;
-
   /* *
     Process individual markets
       Schema:  {

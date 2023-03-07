@@ -26,6 +26,10 @@ let bscProvider = new ethers.providers.JsonRpcProvider(
   process.env.BSC_1RPC_URL
 );
 
+let polygonProvider = new ethers.providers.JsonRpcProvider(
+  process.env.POLYGON_LLAMANODE_URL
+);
+
 let baseUrl = process.env.BASE_URL;
 
 module.exports = {
@@ -34,4 +38,5 @@ module.exports = {
   baseUrl,
   arbitrumProvider,
   bscProvider,
+  polygonProvider,
 };

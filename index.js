@@ -87,21 +87,28 @@ async function doMain(auth) {
   );
   await personalVault.processVault(auth, "10");
   console.log(
-    "==================== END PROCESSING OP VAULT ===================="
+    "++++++++++++++++++++ END PROCESSING OP VAULT ++++++++++++++++++++"
+  );
+  console.log(
+    "==================== START PROCESSING ARBITRUM VAULT ===================="
+  );
+  await personalVault.processVault(auth, "42161");
+  console.log(
+    "++++++++++++++++++++ END PROCESSING ARBITRUM VAULT ++++++++++++++++++++"
   );
   // console.log(
-  //   "==================== START PROCESSING ARBITRUM VAULT ===================="
+  //   "==================== START PROCESSING POLYGON VAULT ===================="
   // );
-  // await personalVault.processVault(auth, "42161");
+  // await personalVault.processVault(auth, "137");
   // console.log(
-  //   "==================== END PROCESSING ARBITRUM VAULT ===================="
+  //   "++++++++++++++++++++ END PROCESSING POLYGON VAULT ++++++++++++++++++++"
   // );
   // console.log(
   //   "==================== START PROCESSING BSC VAULT ===================="
   // );
   // await personalVault.processVault(auth, "56");
   // console.log(
-  //   "==================== END PROCESSING BSC VAULT ===================="
+  //   "++++++++++++++++++++ END PROCESSING BSC VAULT ++++++++++++++++++++"
   // );
 }
 

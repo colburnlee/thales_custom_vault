@@ -7,7 +7,6 @@ const ThalesAMM = require("../contracts/ThalesAMM.js");
 // const PositionalMarketDataContract = require("../contracts/PositionalMarketData.js");
 const marketschecker = require("./marketschecker.js");
 const fs = require("fs");
-
 const data = require("../data.json");
 // Pull in local data - priceUpperLimit, priceLowerLimit, skewImpactLimit
 const priceUpperLimit = Number(data.priceUpperLimit) / 1e18;
@@ -90,6 +89,27 @@ const setNetworkVariables = async (networkId = "10") => {
       process.env.ARBITRUM_POSITIONAL_MARKET_DATA_CONTRACT;
     const PositionalMarketDataContract = require("../contracts/ArbitrumPositionalMarketData.js");
     const gasPrice = await constants.arbitrumProvider.getGasPrice();
+    return {
+      wallet,
+      thalesAMMContract,
+      positionalContractAddress,
+      PositionalMarketDataContract,
+      gasPrice,
+    };
+  } else if (networkId == "137") {
+    const wallet = new ethers.Wallet(
+      constants.privateKey,
+      constants.polygonProvider
+    );
+    const thalesAMMContract = new ethers.Contract(
+      process.env.POLYGON_THALES_AMM_CONTRACT,
+      ThalesAMM.thalesAMMContract.abi,
+      wallet
+    );
+    const positionalContractAddress =
+      process.env.POLYGON_POSITIONAL_MARKET_DATA_CONTRACT;
+    const PositionalMarketDataContract = require("../contracts/ArbitrumPositionalMarketData.js");
+    const gasPrice = await constants.polygonProvider.getGasPrice();
     return {
       wallet,
       thalesAMMContract,
@@ -224,7 +244,7 @@ async function amountToBuy(
   networkId
 ) {
   let decimals = 1e18;
-  if (networkId == "42161") {
+  if (networkId == "42161" || networkId == "137") {
     decimals = 1e6;
   }
 
@@ -347,7 +367,13 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
   // slippage: "5000000000000000"
 
   let network =
-    networkId == "42161" ? "arbitrum" : networkId == "56" ? "bsc" : "optimism";
+    networkId == "42161"
+      ? "arbitrum"
+      : networkId == "56"
+      ? "bsc"
+      : networkId == "137"
+      ? "polygon"
+      : "optimism";
 
   if (result.amount > 0) {
     try {
@@ -415,6 +441,14 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
       if (!data.tradedInRoundAlready[round]) {
         console.log("tradedInRoundAlready is empty");
         data.tradedInRoundAlready[round] = [];
+        // create an archive of the data up to the previous round
+        fs.writeFileSync(
+          `./data/archive/round_${round - 1}.json`,
+          JSON.stringify(data, null, 2)
+        );
+        // clear errorLog and transactionLog
+        data.errorLog = [];
+        data.tradeLog = [];
       }
       if (!data.tradingMarketPositionPerRound[round]) {
         console.log("tradingMarketPositionPerRound is empty");
@@ -437,11 +471,12 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
           `Pushed ${market.position} to tradingMarketPositionPerRound`
         );
       }
+      let quotedAmount = result.quote.toFixed(0); // prevents precision errors when converting to BigInt
       if (data.availableAllocationPerMarket[round][market.address]) {
         let priorAllowance = BigInt(
           data.availableAllocationPerMarket[round][market.address]
         );
-        let newAllowance = priorAllowance - BigInt(w3utils.toWei(result.quote));
+        let newAllowance = priorAllowance - BigInt(quotedAmount) * BigInt(1e18);
         data.availableAllocationPerMarket[round][market.address] =
           newAllowance.toString();
         console.log(
@@ -452,7 +487,7 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
       } else if (!data.availableAllocationPerMarket[round][market.address]) {
         let newAllowance =
           BigInt(data.tradingAllocation) / BigInt(20) -
-          BigInt(w3utils.toWei(result.quote));
+          BigInt(quotedAmount) / BigInt(1e18);
         data.availableAllocationPerMarket[round][market.address] =
           newAllowance.toString();
         console.log(
