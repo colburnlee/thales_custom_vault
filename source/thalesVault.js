@@ -27,9 +27,14 @@ const processVault = async (auth, networkId) => {
     closingDate,
     networkId
   );
-  // Write the data to a file
-  console.log("Writing data to file");
-  fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
+  // check for changes to the data.json file
+  const newData = require("../data.json");
+  if (JSON.stringify(data) !== JSON.stringify(newData)) {
+    console.log("Data has changed");
+    // Write the data to a file
+    console.log("Writing data to file");
+    fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
+  }
 };
 
 const setNetworkVariables = async (networkId = "10") => {

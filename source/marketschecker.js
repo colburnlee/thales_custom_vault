@@ -120,15 +120,15 @@ async function processMarkets(
         // console.log("buyPriceImpactUP: " + buyPriceImpactUP);
         // console.log("buyPriceImpactDOWN: " + buyPriceImpactDOWN);
 
-        if (
-          buyPriceImpactUP >= skewImpactLimit &&
-          buyPriceImpactDOWN >= skewImpactLimit
-        ) {
-          // console.log(
-          //   `Market: ${market.address} - ${market.currencyKey} - Skew Impact too high`
-          // );
-          continue;
-        }
+        // if (
+        //   buyPriceImpactUP >= skewImpactLimit &&
+        //   buyPriceImpactDOWN >= skewImpactLimit
+        // ) {
+        //   console.log(
+        //     `Market: ${market.address} - ${market.currencyKey} - Skew Impact too high`
+        //   );
+        //   continue;
+        // }
 
         let priceUP, priceDOWN;
 
@@ -159,7 +159,7 @@ async function processMarkets(
             currencyKey: market.currencyKey,
             price: priceUP,
           });
-          // console.log(market.address, "PriceUP", priceUP);
+          console.log(market.address, "PriceUP", priceUP);
         } else if (
           priceDOWN > priceLowerLimit &&
           priceDOWN < priceUpperLimit &&
@@ -171,7 +171,7 @@ async function processMarkets(
             currencyKey: market.currencyKey,
             price: priceDOWN,
           });
-          // console.log(market.address, "PriceDOWN", priceDOWN);
+          console.log(market.address, "PriceDOWN", priceDOWN);
         } else {
           continue;
         }
