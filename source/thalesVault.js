@@ -27,14 +27,9 @@ const processVault = async (auth, networkId) => {
     closingDate,
     networkId
   );
-  // check for changes to the data.json file
-  const newData = require("../data.json");
-  if (JSON.stringify(data) !== JSON.stringify(newData)) {
-    console.log("Data has changed");
-    // Write the data to a file
-    console.log("Writing data to file");
-    fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
-  }
+
+  console.log("Writing data to file");
+  fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 };
 
 const setNetworkVariables = async (networkId = "10") => {
@@ -268,6 +263,27 @@ async function amountToBuy(
   const availableAllocationForRound = Number(data.tradingAllocation) / 1e18;
 
   let availableAllocationPerAsset;
+  // if the round hasnt been created yet, create it
+  if (!data.tradedInRoundAlready[round]) {
+    console.log("tradedInRoundAlready is empty");
+    data.tradedInRoundAlready[round] = [];
+    // create an archive of the data up to the previous round
+    fs.writeFileSync(
+      `./data/archive/round_${round - 1}.json`,
+      JSON.stringify(data, null, 2)
+    );
+    // clear errorLog and transactionLog
+    data.errorLog = [];
+    data.tradeLog = [];
+  }
+  if (!data.tradingMarketPositionPerRound[round]) {
+    console.log("tradingMarketPositionPerRound is empty");
+    data.tradingMarketPositionPerRound[round] = {};
+  }
+  if (!data.availableAllocationPerMarket[round]) {
+    console.log("availableAllocationPerMarket is empty");
+    data.availableAllocationPerMarket[round] = {};
+  }
   // check to see if market.address is in data.availableAllocationPerMarket. If it is, update availableAllocationPerAsset, if not, use default value.
   if (data.availableAllocationPerMarket[round][market.address]) {
     availableAllocationPerAsset =
@@ -442,28 +458,6 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
       data.tradeLog.push(tradeLog);
       // Log the details of the trade (quantity, price, market address, etc.) and save to data
 
-      // if the round hasnt been created yet, create it
-      if (!data.tradedInRoundAlready[round]) {
-        console.log("tradedInRoundAlready is empty");
-        data.tradedInRoundAlready[round] = [];
-        // create an archive of the data up to the previous round
-        fs.writeFileSync(
-          `./data/archive/round_${round - 1}.json`,
-          JSON.stringify(data, null, 2)
-        );
-        // clear errorLog and transactionLog
-        data.errorLog = [];
-        data.tradeLog = [];
-      }
-      if (!data.tradingMarketPositionPerRound[round]) {
-        console.log("tradingMarketPositionPerRound is empty");
-        data.tradingMarketPositionPerRound[round] = {};
-      }
-      if (!data.availableAllocationPerMarket[round]) {
-        console.log("availableAllocationPerMarket is empty");
-        data.availableAllocationPerMarket[round] = {};
-      }
-
       // if the market hasnt been created yet, create it
       if (!data.tradedInRoundAlready[round].includes(market.address)) {
         data.tradedInRoundAlready[round].push(market.address);
@@ -492,12 +486,12 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
       } else if (!data.availableAllocationPerMarket[round][market.address]) {
         let newAllowance =
           BigInt(data.tradingAllocation) / BigInt(20) -
-          BigInt(quotedAmount) / BigInt(1e18);
+          BigInt(quotedAmount) * BigInt(1e18);
         data.availableAllocationPerMarket[round][market.address] =
           newAllowance.toString();
         console.log(
           `Pushed ${
-            newAllowance / BigInt(1e18)
+            newAllowance * BigInt(1e18)
           } to availableAllocationPerMarket`
         );
       }
