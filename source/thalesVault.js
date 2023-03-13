@@ -18,18 +18,20 @@ const processVault = async (auth, networkId) => {
   // Get the current vault round information from Optimism
   const { round, roundEndTime, closingDate } = await setOptimismVariables();
 
+  // ensure data.json is up to date
+  setLocalVariables(round);
   // Test trades for each market
-  await evaluateMarkets(
-    priceLowerLimit,
-    priceUpperLimit,
-    skewImpactLimit,
-    round,
-    closingDate,
-    networkId
-  );
+  // await evaluateMarkets(
+  //   priceLowerLimit,
+  //   priceUpperLimit,
+  //   skewImpactLimit,
+  //   round,
+  //   closingDate,
+  //   networkId
+  // );
 
-  console.log("Writing data to file");
-  fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
+  // console.log("Writing data to file");
+  // fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 };
 
 const setNetworkVariables = async (networkId = "10") => {
@@ -119,6 +121,33 @@ const setNetworkVariables = async (networkId = "10") => {
     };
   } else {
     throw new Error("Network ID not recognized");
+  }
+};
+
+// INCOMPLETE
+const setLocalVariables = async (vaultRound) => {
+  // compare vaultRound to data.json latestRound
+  // if vaultRound > data.json latestRound, update data.json latestRound
+  // if vaultRound < data.json latestRound, throw error
+  // if vaultRound == data.json latestRound, continue
+  if (vaultRound > data.latestRound) {
+    console.log("New round detected. Updating data file");
+    // Save a log of the previous round to file
+    fs.writeFileSync(
+      `./data/archive/round_${vaultRound - 1}_test.json`,
+      JSON.stringify(data, null, 2)
+    );
+    // Clear availableAllocationPerMarket, tradedInRoundAlready, tradedInRoundAlready, tradeLog, and errorLog
+    data.latestRound = vaultRound;
+    data.availableAllocationPerMarket = {};
+    data.tradedInRoundAlready = {};
+    data.tradingMarketPositionPerRound = {};
+    data.tradeLog = [];
+    data.errorLog = [];
+  } else if (vaultRound < data.latestRound) {
+    throw new Error("Vault round is less than the latest round");
+  } else {
+    console.log("No new round detected. Continuing");
   }
 };
 
@@ -236,6 +265,7 @@ const evaluateMarkets = async (
   }
 };
 
+// Todo: remove the data.json update portion and move it to setLocalVariables()
 async function amountToBuy(
   market,
   round,
@@ -266,12 +296,13 @@ async function amountToBuy(
   // if the round hasnt been created yet, create it
   if (!data.tradedInRoundAlready[round]) {
     console.log("tradedInRoundAlready is empty");
-    data.tradedInRoundAlready[round] = [];
+
     // create an archive of the data up to the previous round
     fs.writeFileSync(
       `./data/archive/round_${round - 1}.json`,
       JSON.stringify(data, null, 2)
     );
+    data.tradedInRoundAlready[round] = [];
     // clear errorLog and transactionLog
     data.errorLog = [];
     data.tradeLog = [];
