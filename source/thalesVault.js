@@ -30,8 +30,8 @@ const processVault = async (auth, networkId) => {
   //   networkId
   // );
 
-  // console.log("Writing data to file");
-  // fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
+  console.log("Writing data to file");
+  fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 };
 
 const setNetworkVariables = async (networkId = "10") => {
@@ -124,7 +124,6 @@ const setNetworkVariables = async (networkId = "10") => {
   }
 };
 
-// INCOMPLETE
 const setLocalVariables = async (vaultRound) => {
   // compare vaultRound to data.json latestRound
   // if vaultRound > data.json latestRound, update data.json latestRound
@@ -138,7 +137,7 @@ const setLocalVariables = async (vaultRound) => {
       JSON.stringify(data, null, 2)
     );
     // Clear availableAllocationPerMarket, tradedInRoundAlready, tradedInRoundAlready, tradeLog, and errorLog
-    data.latestRound = vaultRound;
+    data.latestRound = vaultRound.toString();
     data.availableAllocationPerMarket = {};
     data.tradedInRoundAlready = {};
     data.tradingMarketPositionPerRound = {};
@@ -294,19 +293,19 @@ async function amountToBuy(
 
   let availableAllocationPerAsset;
   // if the round hasnt been created yet, create it
-  if (!data.tradedInRoundAlready[round]) {
-    console.log("tradedInRoundAlready is empty");
+  // if (!data.tradedInRoundAlready[round]) {
+  //   console.log("tradedInRoundAlready is empty");
 
-    // create an archive of the data up to the previous round
-    fs.writeFileSync(
-      `./data/archive/round_${round - 1}.json`,
-      JSON.stringify(data, null, 2)
-    );
-    data.tradedInRoundAlready[round] = [];
-    // clear errorLog and transactionLog
-    data.errorLog = [];
-    data.tradeLog = [];
-  }
+  //   // create an archive of the data up to the previous round
+  //   fs.writeFileSync(
+  //     `./data/archive/round_${round - 1}.json`,
+  //     JSON.stringify(data, null, 2)
+  //   );
+  //   data.tradedInRoundAlready[round] = [];
+  //   // clear errorLog and transactionLog
+  //   data.errorLog = [];
+  //   data.tradeLog = [];
+  // }
   if (!data.tradingMarketPositionPerRound[round]) {
     console.log("tradingMarketPositionPerRound is empty");
     data.tradingMarketPositionPerRound[round] = {};
