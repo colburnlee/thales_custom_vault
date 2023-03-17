@@ -21,16 +21,15 @@ const processVault = async (auth, networkId) => {
   // ensure data.json is up to date
   setLocalVariables(round);
   // Test trades for each market
-  // await evaluateMarkets(
-  //   priceLowerLimit,
-  //   priceUpperLimit,
-  //   skewImpactLimit,
-  //   round,
-  //   closingDate,
-  //   networkId
-  // );
+  await evaluateMarkets(
+    priceLowerLimit,
+    priceUpperLimit,
+    skewImpactLimit,
+    round,
+    closingDate,
+    networkId
+  );
 
-  console.log("Writing data to file");
   fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 };
 
@@ -133,7 +132,7 @@ const setLocalVariables = async (vaultRound) => {
     console.log("New round detected. Updating data file");
     // Save a log of the previous round to file
     fs.writeFileSync(
-      `./data/archive/round_${vaultRound - 1}_test.json`,
+      `./data/archive/round_${vaultRound - 1}.json`,
       JSON.stringify(data, null, 2)
     );
     // Clear availableAllocationPerMarket, tradedInRoundAlready, tradedInRoundAlready, tradeLog, and errorLog
@@ -145,8 +144,6 @@ const setLocalVariables = async (vaultRound) => {
     data.errorLog = [];
   } else if (vaultRound < data.latestRound) {
     throw new Error("Vault round is less than the latest round");
-  } else {
-    console.log("No new round detected. Continuing");
   }
 };
 
@@ -489,10 +486,11 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
       // Log the details of the trade (quantity, price, market address, etc.) and save to data
 
       // if the market hasnt been created yet, create it
-      if (!data.tradedInRoundAlready[round].includes(market.address)) {
+      if (!data.tradedInRoundAlready[round][market.address]) {
         data.tradedInRoundAlready[round].push(market.address);
         console.log(`Pushed ${market.address} to tradedInRoundAlready`);
       }
+
       if (!data.tradingMarketPositionPerRound[round][market.address]) {
         data.tradingMarketPositionPerRound[round][market.address] =
           market.position.toString();
