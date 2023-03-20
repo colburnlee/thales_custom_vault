@@ -469,7 +469,7 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
       let reciept = await tx.wait();
       let transactionHash = reciept.transactionHash;
       console.log(`Transaction hash: ${transactionHash}`);
-      let timestamp = new Date().toISOString();
+      let timestamp = new Date().toLocaleString("en-US");
       // Create a log of the trade
       let tradeLog = {
         network: network,
@@ -493,9 +493,11 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
 
       if (!data.tradingMarketPositionPerRound[round][market.address]) {
         data.tradingMarketPositionPerRound[round][market.address] =
-          market.position.toString();
+          result.position.toString();
         console.log(
-          `Pushed ${market.position} to tradingMarketPositionPerRound`
+          `Pushed ${result.position} (${
+            result.position > 0 ? "DOWN" : "UP"
+          }) to tradingMarketPositionPerRound`
         );
       }
       let quotedAmount = result.quote.toFixed(0); // prevents precision errors when converting to BigInt
@@ -525,7 +527,7 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
       }
     } catch (e) {
       let error = e.reason ? e.reason : e.message;
-      let timestamp = new Date().toISOString();
+      let timestamp = new Date().toLocaleString("en-US");
       let errorMessage = {
         network: network,
         round: round.toString(),
