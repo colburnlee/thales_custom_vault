@@ -89,13 +89,13 @@ async function doMain(auth) {
   console.log(
     "++++++++++++++++++++ END PROCESSING OP VAULT ++++++++++++++++++++"
   );
-  // console.log(
-  //   "==================== START PROCESSING ARBITRUM VAULT ===================="
-  // );
-  // await personalVault.processVault(auth, "42161");
-  // console.log(
-  //   "++++++++++++++++++++ END PROCESSING ARBITRUM VAULT ++++++++++++++++++++"
-  // );
+  console.log(
+    "==================== START PROCESSING ARBITRUM VAULT ===================="
+  );
+  await personalVault.processVault(auth, "42161");
+  console.log(
+    "++++++++++++++++++++ END PROCESSING ARBITRUM VAULT ++++++++++++++++++++"
+  );
   // console.log(
   //   "==================== START PROCESSING POLYGON VAULT ===================="
   // );

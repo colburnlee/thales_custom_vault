@@ -32,6 +32,7 @@ const processVault = async (auth, networkId) => {
 
   fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 };
+///////////////// End of Main function ///////////////////////
 
 const setNetworkVariables = async (networkId = "10") => {
   if (networkId == "10") {
@@ -48,12 +49,19 @@ const setNetworkVariables = async (networkId = "10") => {
       process.env.POSITIONAL_MARKET_DATA_CONTRACT;
     const PositionalMarketDataContract = require("../contracts/PositionalMarketData.js");
     const gasPrice = await constants.etherprovider.getGasPrice();
+    const allocation = BigInt(data.networkAllocation["optimism"]);
+    const remainingAllocation = await setBalanceVariables(
+      allocation,
+      "optimism"
+    );
     return {
       wallet,
       thalesAMMContract,
       positionalContractAddress,
       PositionalMarketDataContract,
       gasPrice,
+      allocation,
+      remainingAllocation,
     };
   } else if (networkId == "56") {
     const wallet = new ethers.Wallet(
@@ -69,12 +77,16 @@ const setNetworkVariables = async (networkId = "10") => {
       process.env.BSC_POSITIONAL_MARKET_DATA_CONTRACT;
     const PositionalMarketDataContract = require("../contracts/ArbitrumPositionalMarketData.js");
     const gasPrice = await constants.bscProvider.getGasPrice();
+    const allocation = BigInt(data.networkAllocation["bsc"]);
+    const remainingAllocation = await setBalanceVariables(allocation, "bsc");
     return {
       wallet,
       thalesAMMContract,
       positionalContractAddress,
       PositionalMarketDataContract,
       gasPrice,
+      allocation,
+      remainingAllocation,
     };
   } else if (networkId == "42161") {
     const wallet = new ethers.Wallet(
@@ -90,12 +102,19 @@ const setNetworkVariables = async (networkId = "10") => {
       process.env.ARBITRUM_POSITIONAL_MARKET_DATA_CONTRACT;
     const PositionalMarketDataContract = require("../contracts/ArbitrumPositionalMarketData.js");
     const gasPrice = await constants.arbitrumProvider.getGasPrice();
+    const allocation = BigInt(data.networkAllocation["arbitrum"]);
+    const remainingAllocation = await setBalanceVariables(
+      allocation,
+      "arbitrum"
+    );
     return {
       wallet,
       thalesAMMContract,
       positionalContractAddress,
       PositionalMarketDataContract,
       gasPrice,
+      allocation,
+      remainingAllocation,
     };
   } else if (networkId == "137") {
     const wallet = new ethers.Wallet(
@@ -111,16 +130,36 @@ const setNetworkVariables = async (networkId = "10") => {
       process.env.POLYGON_POSITIONAL_MARKET_DATA_CONTRACT;
     const PositionalMarketDataContract = require("../contracts/ArbitrumPositionalMarketData.js");
     const gasPrice = await constants.polygonProvider.getGasPrice();
+    const allocation = BigInt(data.networkAllocation["polygon"]);
+    const remainingAllocation = await setBalanceVariables(
+      allocation,
+      "polygon"
+    );
     return {
       wallet,
       thalesAMMContract,
       positionalContractAddress,
       PositionalMarketDataContract,
       gasPrice,
+      allocation,
+      remainingAllocation,
     };
   } else {
     throw new Error("Network ID not recognized");
   }
+};
+
+const setBalanceVariables = async (allocation, network) => {
+  // take allocation and networkId as input. Loop through the tradelog for trades that match the networkId and subtract the amount traded (quote) from the allocation
+  // return the remaining allocation
+  let remainingAllocation = BigInt(allocation);
+  for (let i = 0; i < data.tradeLog.length; i++) {
+    if (data.tradeLog[i].network == network) {
+      remainingAllocation -= BigInt(data.tradeLog[i].quote * 1e18);
+    }
+  }
+  data.remainingAllocation[network] = remainingAllocation.toString();
+  return remainingAllocation;
 };
 
 const setLocalVariables = async (vaultRound) => {
@@ -181,7 +220,26 @@ const evaluateMarkets = async (
     positionalContractAddress,
     PositionalMarketDataContract,
     gasPrice: gasp,
+    allocation,
+    remainingAllocation,
   } = await setNetworkVariables(networkId);
+
+  if (remainingAllocation <= BigInt(10 * 1e18)) {
+    console.log(
+      ` Remaining trading allocation ($${
+        remainingAllocation / BigInt(1e18)
+      }) Not enough allocation to trade on ${
+        networkId == "42161"
+          ? "arbitrum"
+          : networkId == "56"
+          ? "bsc"
+          : networkId == "137"
+          ? "polygon"
+          : "optimism"
+      }`
+    );
+    return;
+  }
 
   let tradingMarkets = await marketschecker.processMarkets(
     priceLowerLimit,
@@ -192,6 +250,20 @@ const evaluateMarkets = async (
     positionalContractAddress,
     PositionalMarketDataContract,
     networkId
+  );
+
+  console.log(
+    `${
+      networkId == "42161"
+        ? "arbitrum"
+        : networkId == "56"
+        ? "bsc"
+        : networkId == "137"
+        ? "polygon"
+        : "optimism"
+    } Markets Available: ${tradingMarkets.length} Total Allocation: $${
+      allocation / BigInt(1e18)
+    } Remaining Allocation: $${remainingAllocation / BigInt(1e18)}`
   );
 
   for (const key in tradingMarkets) {
@@ -232,7 +304,8 @@ const evaluateMarkets = async (
       round,
       skewImpactLimit,
       thalesAMMContract,
-      networkId
+      networkId,
+      allocation
     );
 
     if (result.amount > 0) {
@@ -267,7 +340,8 @@ async function amountToBuy(
   round,
   skewImpactLimit,
   contract,
-  networkId
+  networkId,
+  allocation
 ) {
   let decimals = 1e18;
   if (networkId == "42161" || networkId == "137") {
@@ -286,7 +360,8 @@ async function amountToBuy(
     1e18;
 
   // Get the available allocation for this market in this round
-  const availableAllocationForRound = Number(data.tradingAllocation) / 1e18;
+  // const availableAllocationForRound = Number(data.tradingAllocation) / 1e18;
+  const availableAllocationForRound = Number(allocation / BigInt(1e18));
 
   let availableAllocationPerAsset;
   // if the round hasnt been created yet, create it
@@ -478,7 +553,7 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
         market: market.address,
         position: result.position > 0 ? "DOWN" : "UP",
         amount: result.amount,
-        quote: result.quote,
+        quote: result.quote.toString(),
         timestamp: timestamp,
         transactionHash: transactionHash,
       };
@@ -535,7 +610,7 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
         market: market.address,
         position: market.position > 0 ? "DOWN" : "UP",
         amount: result.amount,
-        quote: result.quote,
+        quote: result.quote.toString(),
         error: error,
         timestamp: timestamp,
       };
