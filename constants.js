@@ -7,11 +7,11 @@ const privateKey = process.env.PRIVATE_KEY;
 //   process.env.ALCHEMY
 // );
 
-// let etherprovider = new ethers.providers.JsonRpcProvider(
-//   "https://rpc.ankr.com/optimism"
-// );
+let etherprovider = new ethers.providers.JsonRpcProvider(
+  "https://rpc.ankr.com/optimism"
+);
 
-let etherprovider = new ethers.providers.JsonRpcProvider("https://1rpc.io/op"); //https://endpoints.omniatech.io/v1/op/mainnet/public
+// let etherprovider = new ethers.providers.JsonRpcProvider("https://1rpc.io/op"); //https://endpoints.omniatech.io/v1/op/mainnet/public
 
 // let etherprovider = new ethers.providers.JsonRpcProvider(process.env.OMNIA_URL);
 // let arbitrumProvider = new ethers.providers.JsonRpcProvider(

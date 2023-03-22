@@ -181,6 +181,7 @@ const setLocalVariables = async (vaultRound) => {
     data.tradingMarketPositionPerRound = {};
     data.tradeLog = [];
     data.errorLog = [];
+    data.remainingAllocation = data.networkAllocation;
   } else if (vaultRound < data.latestRound) {
     throw new Error("Vault round is less than the latest round");
   }
@@ -253,7 +254,7 @@ const evaluateMarkets = async (
   );
 
   console.log(
-    `${
+    ` Total ${
       networkId == "42161"
         ? "arbitrum"
         : networkId == "56"
@@ -261,9 +262,9 @@ const evaluateMarkets = async (
         : networkId == "137"
         ? "polygon"
         : "optimism"
-    } Markets Available: ${tradingMarkets.length} Total Allocation: $${
-      allocation / BigInt(1e18)
-    } Remaining Allocation: $${remainingAllocation / BigInt(1e18)}`
+    } allocation: $${allocation / BigInt(1e18)} Remaining Allocation: $${
+      remainingAllocation / BigInt(1e18)
+    }`
   );
 
   for (const key in tradingMarkets) {
