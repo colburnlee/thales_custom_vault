@@ -363,6 +363,7 @@ async function amountToBuy(
   // Get the available allocation for this market in this round
   // const availableAllocationForRound = Number(data.tradingAllocation) / 1e18;
   const availableAllocationForRound = Number(allocation / BigInt(1e18));
+  const availableAllocationForMarket = availableAllocationForRound * 0.05;
 
   let availableAllocationPerAsset;
   // if the round hasnt been created yet, create it
@@ -379,21 +380,31 @@ async function amountToBuy(
   //   data.errorLog = [];
   //   data.tradeLog = [];
   // }
-  if (!data.tradingMarketPositionPerRound[round]) {
-    console.log("tradingMarketPositionPerRound is empty");
-    data.tradingMarketPositionPerRound[round] = {};
-  }
-  if (!data.availableAllocationPerMarket[round]) {
-    console.log("availableAllocationPerMarket is empty");
-    data.availableAllocationPerMarket[round] = {};
-  }
+  // if (!data.tradingMarketPositionPerRound[round]) {
+  //   console.log("tradingMarketPositionPerRound is empty");
+  //   data.tradingMarketPositionPerRound[round] = {};
+  // }
+  // if (!data.availableAllocationPerMarket[round]) {
+  //   console.log("availableAllocationPerMarket is empty");
+  //   data.availableAllocationPerMarket[round] = {};
+  // }
   // check to see if market.address is in data.availableAllocationPerMarket. If it is, update availableAllocationPerAsset, if not, use default value.
-  if (data.availableAllocationPerMarket[round][market.address]) {
-    availableAllocationPerAsset =
-      data.availableAllocationPerMarket[round][market.address] / 1e18;
-  } else {
-    availableAllocationPerAsset = availableAllocationForRound * 0.05;
+  for (let i = 0; i < data.tradeLog.length; i++) {
+    if (data.tradeLog[i].market == market.address) {
+      let previousQuote = +data.tradeLog[i].quote;
+      availableAllocationPerAsset =
+        availableAllocationForMarket - previousQuote;
+      break;
+    } else {
+      availableAllocationPerAsset = availableAllocationForMarket;
+    }
   }
+  // if (data.availableAllocationPerMarket[round][market.address]) {
+  //   availableAllocationPerAsset =
+  //     data.availableAllocationPerMarket[round][market.address] / 1e18;
+  // } else {
+  //   availableAllocationPerAsset = availableAllocationForMarket;
+  // }
   console.log(
     `Available allocation market: $${availableAllocationPerAsset.toFixed(2)}`
   );
@@ -504,11 +515,10 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
       // Check if this market has already been traded in this round. Returns true or false.
       let tradedInRoundAlready;
       let tradedBeforePosition;
-      for (const key in data.tradedInRoundAlready[round]) {
-        if (market.address == data.tradedInRoundAlready[round][key]) {
+      for (let i = 0; i < data.tradeLog.length; i++) {
+        if (market.address == data.tradeLog[i].market) {
           tradedInRoundAlready = true;
-          tradedBeforePosition =
-            data.tradingMarketPositionPerRound[round][market.address];
+          tradedBeforePosition = data.tradeLog[i].position == "UP" ? 0 : 1;
           console.log(
             `Previous Position: ${
               tradedBeforePosition > 0 ? "DOWN" : "UP"
@@ -518,7 +528,7 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
             console.log(
               "Market already traded in round, but with different position. Skipping"
             );
-            continue;
+            return;
           }
         } else {
           tradedInRoundAlready = false;
@@ -532,8 +542,10 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
         return;
       }
 
+      // console.log(`Executing trade for ${market.currencyKey}...`);
+      // return;
+
       // Execute trade
-      // Note I changed position from market to result (and string), and I changed gas values to strings
       let tx = await contract.buyFromAMM(
         market.address,
         result.position.toString(),
@@ -562,45 +574,45 @@ async function executeTrade(market, result, round, gasp, contract, networkId) {
       // Log the details of the trade (quantity, price, market address, etc.) and save to data
 
       // if the market hasnt been created yet, create it
-      if (!data.tradedInRoundAlready[round][market.address]) {
-        data.tradedInRoundAlready[round].push(market.address);
-        console.log(`Pushed ${market.address} to tradedInRoundAlready`);
-      }
+      // if (!data.tradedInRoundAlready[round][market.address]) {
+      //   data.tradedInRoundAlready[round].push(market.address);
+      //   console.log(`Pushed ${market.address} to tradedInRoundAlready`);
+      // }
 
-      if (!data.tradingMarketPositionPerRound[round][market.address]) {
-        data.tradingMarketPositionPerRound[round][market.address] =
-          result.position.toString();
-        console.log(
-          `Pushed ${result.position} (${
-            result.position > 0 ? "DOWN" : "UP"
-          }) to tradingMarketPositionPerRound`
-        );
-      }
-      let quotedAmount = result.quote.toFixed(0); // prevents precision errors when converting to BigInt
-      if (data.availableAllocationPerMarket[round][market.address]) {
-        let priorAllowance = BigInt(
-          data.availableAllocationPerMarket[round][market.address]
-        );
-        let newAllowance = priorAllowance - BigInt(quotedAmount) * BigInt(1e18);
-        data.availableAllocationPerMarket[round][market.address] =
-          newAllowance.toString();
-        console.log(
-          `Pushed ${
-            newAllowance / BigInt(1e18)
-          } to availableAllocationPerMarket`
-        );
-      } else if (!data.availableAllocationPerMarket[round][market.address]) {
-        let newAllowance =
-          BigInt(data.tradingAllocation) / BigInt(20) -
-          BigInt(quotedAmount) * BigInt(1e18);
-        data.availableAllocationPerMarket[round][market.address] =
-          newAllowance.toString();
-        console.log(
-          `Pushed ${
-            newAllowance * BigInt(1e18)
-          } to availableAllocationPerMarket`
-        );
-      }
+      // if (!data.tradingMarketPositionPerRound[round][market.address]) {
+      //   data.tradingMarketPositionPerRound[round][market.address] =
+      //     result.position.toString();
+      //   console.log(
+      //     `Pushed ${result.position} (${
+      //       result.position > 0 ? "DOWN" : "UP"
+      //     }) to tradingMarketPositionPerRound`
+      //   );
+      // }
+      // let quotedAmount = result.quote.toFixed(0); // prevents precision errors when converting to BigInt
+      // if (data.availableAllocationPerMarket[round][market.address]) {
+      //   let priorAllowance = BigInt(
+      //     data.availableAllocationPerMarket[round][market.address]
+      //   );
+      //   let newAllowance = priorAllowance - BigInt(quotedAmount) * BigInt(1e18);
+      //   data.availableAllocationPerMarket[round][market.address] =
+      //     newAllowance.toString();
+      //   console.log(
+      //     `Pushed ${
+      //       newAllowance / BigInt(1e18)
+      //     } to availableAllocationPerMarket`
+      //   );
+      // } else if (!data.availableAllocationPerMarket[round][market.address]) {
+      //   let newAllowance =
+      //     BigInt(data.tradingAllocation) / BigInt(20) -
+      //     BigInt(quotedAmount) * BigInt(1e18);
+      //   data.availableAllocationPerMarket[round][market.address] =
+      //     newAllowance.toString();
+      //   console.log(
+      //     `Pushed ${
+      //       newAllowance * BigInt(1e18)
+      //     } to availableAllocationPerMarket`
+      //   );
+      // }
     } catch (e) {
       let error = e.reason ? e.reason : e.message;
       let timestamp = new Date().toLocaleString("en-US");

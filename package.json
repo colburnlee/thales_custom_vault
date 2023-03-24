@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest --verbose"
+    "test": "jest --verbose",
+    "results": "node source/createResults.js"
   },
   "keywords": [],
   "author": "",
