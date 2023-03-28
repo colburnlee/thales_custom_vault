@@ -225,7 +225,7 @@ const evaluateMarkets = async (
     remainingAllocation,
   } = await setNetworkVariables(networkId);
 
-  if (remainingAllocation <= BigInt(10 * 1e18)) {
+  if (remainingAllocation <= BigInt(5 * 1e18)) {
     console.log(
       ` Remaining trading allocation ($${
         remainingAllocation / BigInt(1e18)
