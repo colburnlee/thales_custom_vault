@@ -17,7 +17,6 @@ const skewImpactLimit = Number(data.skewImpactLimit) / 1e18;
 const processVault = async (auth, networkId) => {
   // Get the current vault round information from Optimism
   const { round, roundEndTime, closingDate } = await setOptimismVariables();
-
   // ensure data.json is up to date
   setLocalVariables(round);
   // Test trades for each market
@@ -29,7 +28,6 @@ const processVault = async (auth, networkId) => {
     closingDate,
     networkId
   );
-
   fs.writeFileSync("data.json", JSON.stringify(data, null, 2));
 };
 ///////////////// End of Main function ///////////////////////
@@ -335,7 +333,6 @@ const evaluateMarkets = async (
   }
 };
 
-// Todo: remove the data.json update portion and move it to setLocalVariables()
 async function amountToBuy(
   market,
   round,

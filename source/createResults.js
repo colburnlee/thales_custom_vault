@@ -302,12 +302,232 @@ const createSummary = async (roundData) => {
   return summary;
 };
 
+const createOverallSummary = async (summaryData) => {
+  let overallSummary = {
+    total: {
+      trades: 0,
+      wins: 0,
+      losses: 0,
+      amountWon: 0,
+      amountLost: 0,
+      invested: 0,
+      winPercent: 0,
+      lossPercent: 0,
+      profit: 0,
+    },
+    optimism: {
+      trades: 0,
+      wins: 0,
+      losses: 0,
+      amountWon: 0,
+      amountLost: 0,
+      invested: 0,
+      winPercent: 0,
+      lossPercent: 0,
+      profit: 0,
+    },
+    arbitrum: {
+      trades: 0,
+      wins: 0,
+      losses: 0,
+      amountWon: 0,
+      amountLost: 0,
+      invested: 0,
+      winPercent: 0,
+      lossPercent: 0,
+      profit: 0,
+    },
+    bsc: {
+      trades: 0,
+      wins: 0,
+      losses: 0,
+      amountWon: 0,
+      amountLost: 0,
+      invested: 0,
+      winPercent: 0,
+      lossPercent: 0,
+      profit: 0,
+    },
+    polygon: {
+      trades: 0,
+      wins: 0,
+      losses: 0,
+      amountWon: 0,
+      amountLost: 0,
+      invested: 0,
+      winPercent: 0,
+      lossPercent: 0,
+      profit: 0,
+    },
+  };
+
+  for (let i = 0; i < summaryData.length; i++) {
+    let summary = summaryData[i];
+
+    // All Networks
+    overallSummary.total.trades += summary.total.trades;
+    overallSummary.total.wins += summary.total.wins;
+    overallSummary.total.losses += summary.total.losses;
+    overallSummary.total.amountWon += summary.total.amountWon;
+    overallSummary.total.amountLost += summary.total.amountLost;
+    overallSummary.total.invested += summary.total.invested;
+
+    // Optimism
+    overallSummary.optimism.trades += summary.optimism.trades;
+    overallSummary.optimism.wins += summary.optimism.wins;
+    overallSummary.optimism.losses += summary.optimism.losses;
+    overallSummary.optimism.amountWon += summary.optimism.amountWon;
+    overallSummary.optimism.amountLost += summary.optimism.amountLost;
+    overallSummary.optimism.invested += summary.optimism.invested;
+
+    // Arbitrum
+    overallSummary.arbitrum.trades += summary.arbitrum.trades;
+    overallSummary.arbitrum.wins += summary.arbitrum.wins;
+    overallSummary.arbitrum.losses += summary.arbitrum.losses;
+    overallSummary.arbitrum.amountWon += summary.arbitrum.amountWon;
+    overallSummary.arbitrum.amountLost += summary.arbitrum.amountLost;
+    overallSummary.arbitrum.invested += summary.arbitrum.invested;
+
+    if (summary.bsc && summary.bsc.trades > 0) {
+      // BSC
+      overallSummary.bsc.trades += summary.bsc.trades;
+      overallSummary.bsc.wins += summary.bsc.wins;
+      overallSummary.bsc.losses += summary.bsc.losses;
+      overallSummary.bsc.amountWon += summary.bsc.amountWon;
+      overallSummary.bsc.amountLost += summary.bsc.amountLost;
+      overallSummary.bsc.invested += summary.bsc.invested;
+    }
+
+    if (summary.polygon && summary.polygon.trades > 0) {
+      // Polygon
+      overallSummary.polygon.trades += summary.polygon.trades;
+      overallSummary.polygon.wins += summary.polygon.wins;
+      overallSummary.polygon.losses += summary.polygon.losses;
+      overallSummary.polygon.amountWon += summary.polygon.amountWon;
+      overallSummary.polygon.amountLost += summary.polygon.amountLost;
+      overallSummary.polygon.invested += summary.polygon.invested;
+    }
+  }
+
+  // All Networks
+  overallSummary.total.winPercent =
+    (overallSummary.total.wins / overallSummary.total.trades) * 100;
+  overallSummary.total.lossPercent =
+    (overallSummary.total.losses / overallSummary.total.trades) * 100;
+  overallSummary.total.amountWon = Number(
+    overallSummary.total.amountWon.toFixed(2)
+  );
+  overallSummary.total.amountLost = Number(
+    overallSummary.total.amountLost.toFixed(2)
+  );
+  overallSummary.total.invested = Number(
+    overallSummary.total.invested.toFixed(2)
+  );
+  overallSummary.total.profit = Number(
+    (overallSummary.total.amountWon - overallSummary.total.amountLost).toFixed(
+      2
+    )
+  );
+
+  // Optimism
+  overallSummary.optimism.winPercent =
+    (overallSummary.optimism.wins / overallSummary.optimism.trades) * 100;
+  overallSummary.optimism.lossPercent =
+    (overallSummary.optimism.losses / overallSummary.optimism.trades) * 100;
+  overallSummary.optimism.amountWon = Number(
+    overallSummary.optimism.amountWon.toFixed(2)
+  );
+  overallSummary.optimism.amountLost = Number(
+    overallSummary.optimism.amountLost.toFixed(2)
+  );
+  overallSummary.optimism.invested = Number(
+    overallSummary.optimism.invested.toFixed(2)
+  );
+  overallSummary.optimism.profit = Number(
+    (
+      overallSummary.optimism.amountWon - overallSummary.optimism.amountLost
+    ).toFixed(2)
+  );
+
+  // Arbitrum
+  overallSummary.arbitrum.winPercent =
+    (overallSummary.arbitrum.wins / overallSummary.arbitrum.trades) * 100;
+  overallSummary.arbitrum.lossPercent =
+    (overallSummary.arbitrum.losses / overallSummary.arbitrum.trades) * 100;
+  overallSummary.arbitrum.amountWon = Number(
+    overallSummary.arbitrum.amountWon.toFixed(2)
+  );
+  overallSummary.arbitrum.amountLost = Number(
+    overallSummary.arbitrum.amountLost.toFixed(2)
+  );
+  overallSummary.arbitrum.invested = Number(
+    overallSummary.arbitrum.invested.toFixed(2)
+  );
+  overallSummary.arbitrum.profit = Number(
+    (
+      overallSummary.arbitrum.amountWon - overallSummary.arbitrum.amountLost
+    ).toFixed(2)
+  );
+
+  if (overallSummary.bsc && overallSummary.bsc.trades > 0) {
+    // BSC
+    overallSummary.bsc.winPercent =
+      (overallSummary.bsc.wins / overallSummary.bsc.trades) * 100;
+    overallSummary.bsc.lossPercent =
+      (overallSummary.bsc.losses / overallSummary.bsc.trades) * 100;
+    overallSummary.bsc.amountWon = Number(
+      overallSummary.bsc.amountWon.toFixed(2)
+    );
+    overallSummary.bsc.amountLost = Number(
+      overallSummary.bsc.amountLost.toFixed(2)
+    );
+    overallSummary.bsc.invested = Number(
+      overallSummary.bsc.invested.toFixed(2)
+    );
+    overallSummary.bsc.profit = Number(
+      (overallSummary.bsc.amountWon - overallSummary.bsc.amountLost).toFixed(2)
+    );
+  }
+  if (overallSummary.polygon && overallSummary.polygon.trades > 0) {
+    // Polygon
+    overallSummary.polygon.winPercent =
+      (overallSummary.polygon.wins / overallSummary.polygon.trades) * 100;
+    overallSummary.polygon.lossPercent =
+      (overallSummary.polygon.losses / overallSummary.polygon.trades) * 100;
+    overallSummary.polygon.amountWon = Number(
+      overallSummary.polygon.amountWon.toFixed(2)
+    );
+    overallSummary.polygon.amountLost = Number(
+      overallSummary.polygon.amountLost.toFixed(2)
+    );
+    overallSummary.polygon.invested = Number(
+      overallSummary.polygon.invested.toFixed(2)
+    );
+    overallSummary.polygon.profit = Number(
+      (
+        overallSummary.polygon.amountWon - overallSummary.polygon.amountLost
+      ).toFixed(2)
+    );
+  }
+
+  return overallSummary;
+};
+
 const main = async () => {
-  const roundData = require("../data/archive/round_18.json"); // Change this to the round you want to process
-  let roundDataWithResults = await createResults(roundData);
-  let summary = await createSummary(roundDataWithResults);
-  allResults.roundResults.push(summary);
-  fs.writeFileSync("./data/results.json", JSON.stringify(allResults, null, 2));
+  const roundData = require("../data/archive/round_18.json");
+  try {
+    let roundDataWithResults = await createResults(roundData);
+    let summary = await createSummary(roundDataWithResults);
+    allResults.roundResults.push(summary);
+    let overallSummary = await createOverallSummary(allResults.roundResults);
+    allResults.overallSummary = overallSummary;
+    fs.writeFileSync(
+      "./data/results.json",
+      JSON.stringify(allResults, null, 2)
+    );
+  } catch (error) {
+    console.log("error: ", error);
+  }
 };
 
 main();
