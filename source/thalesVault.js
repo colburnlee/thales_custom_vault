@@ -362,7 +362,7 @@ async function amountToBuy(
   const availableAllocationForRound = Number(allocation / BigInt(1e18));
   const availableAllocationForMarket = availableAllocationForRound * 0.05;
 
-  let availableAllocationPerAsset;
+  let availableAllocationPerAsset = availableAllocationForMarket;
   // if the round hasnt been created yet, create it
   // if (!data.tradedInRoundAlready[round]) {
   //   console.log("tradedInRoundAlready is empty");
@@ -392,10 +392,9 @@ async function amountToBuy(
       availableAllocationPerAsset =
         availableAllocationForMarket - previousQuote;
       break;
-    } else {
-      availableAllocationPerAsset = availableAllocationForMarket;
     }
   }
+
   // if (data.availableAllocationPerMarket[round][market.address]) {
   //   availableAllocationPerAsset =
   //     data.availableAllocationPerMarket[round][market.address] / 1e18;
@@ -403,7 +402,9 @@ async function amountToBuy(
   //   availableAllocationPerAsset = availableAllocationForMarket;
   // }
   console.log(
-    `Available allocation market: $${availableAllocationPerAsset.toFixed(2)}`
+    `Available allocation for market: $${availableAllocationPerAsset.toFixed(
+      2
+    )}`
   );
   const maxAllocationAmount = availableAllocationPerAsset / market.price; // this is a cieling value, as it would a trade with zero slippage
   let amount = Math.round(maxAllocationAmount);

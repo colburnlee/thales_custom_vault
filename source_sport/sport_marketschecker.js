@@ -51,7 +51,7 @@ async function processMarkets(
   let i = 0;
 
   for (const market of positionalMarkets) {
-    console.log("Processing " + i + " market");
+    // console.log("Processing " + i + " market");
     i++;
 
     const marketOdds = oddsForAllActiveMarkets.find(
@@ -75,9 +75,9 @@ async function processMarkets(
         let buyPriceImpactDraw =
           (marketPriceImpact.priceImpact[Position.DRAW] || 0) / 1e18;
         console.log(market.homeTeam + " vs " + market.awayTeam);
-        console.log("buyPriceImpactHome is " + buyPriceImpactHome);
-        console.log("buyPriceImpactAway is " + buyPriceImpactAway);
-        console.log("buyPriceImpactDraw is " + buyPriceImpactDraw);
+        // console.log("buyPriceImpactHome is " + buyPriceImpactHome);
+        // console.log("buyPriceImpactAway is " + buyPriceImpactAway);
+        // console.log("buyPriceImpactDraw is " + buyPriceImpactDraw);
         if (
           buyPriceImpactHome >= skewImpactLimit &&
           buyPriceImpactAway >= skewImpactLimit &&
@@ -101,7 +101,7 @@ async function processMarkets(
             currencyKey: market.currencyKey,
             price: priceDraw,
           });
-          console.log(market.address, "priceDraw", priceDraw);
+          // console.log(market.address, "priceDraw", priceDraw);
         }
         if (
           priceHome > priceLowerLimit &&
@@ -114,7 +114,7 @@ async function processMarkets(
             currencyKey: market.currencyKey,
             price: priceHome,
           });
-          console.log(market.address, "PriceHome", priceHome);
+          // console.log(market.address, "PriceHome", priceHome);
         }
         if (
           priceAway > priceLowerLimit &&
@@ -127,7 +127,7 @@ async function processMarkets(
             currencyKey: market.currencyKey,
             price: priceAway,
           });
-          console.log(market.address, "PriceAway", priceAway);
+          // console.log(market.address, "PriceAway", priceAway);
         }
       } catch (e) {
         console.log(e);

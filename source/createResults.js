@@ -514,7 +514,7 @@ const createOverallSummary = async (summaryData) => {
 };
 
 const main = async () => {
-  const roundData = require("../data/archive/round_18.json");
+  const roundData = require("../data/archive/round_19.json");
   try {
     let roundDataWithResults = await createResults(roundData);
     let summary = await createSummary(roundDataWithResults);

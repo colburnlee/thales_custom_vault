@@ -53,25 +53,25 @@ async function processVault() {
 
 async function closeRound(roundEndTime) {
   console.log("Trying to close the round");
-  try {
-    let now = new Date();
+  // try {
+  //   let now = new Date();
 
-    if (now.getTime() > roundEndTime) {
-      let canCloseRound = await VaultContract.canCloseCurrentRound();
-      if (canCloseRound) {
-        let tx = await VaultContract.closeRound();
-        await tx.wait().then((e) => {
-          console.log("Round closed");
-        });
-      }
-    } else {
-      console.log("Cannot close round yet");
-    }
-  } catch (e) {
-    let errorBody = JSON.parse(e.error.error.body);
-    console.log("Failed to close the round", errorBody.error.message);
-    await sendRoundErrorMessage(errorBody.error.message);
-  }
+  //   if (now.getTime() > roundEndTime) {
+  //     let canCloseRound = await VaultContract.canCloseCurrentRound();
+  //     if (canCloseRound) {
+  //       let tx = await VaultContract.closeRound();
+  //       await tx.wait().then((e) => {
+  //         console.log("Round closed");
+  //       });
+  //     }
+  //   } else {
+  //     console.log("Cannot close round yet");
+  //   }
+  // } catch (e) {
+  //   let errorBody = JSON.parse(e.error.error.body);
+  //   console.log("Failed to close the round", errorBody.error.message);
+  //   await sendRoundErrorMessage(errorBody.error.message);
+  // }
 }
 
 async function trade(
@@ -110,25 +110,28 @@ async function trade(
     console.log("Quote", result.quote);
 
     if (result.amount > 0) {
-      try {
-        let tx = await VaultContract.trade(
-          market.address,
-          w3utils.toWei(result.amount.toString()),
-          result.position,
-          {
-            gasLimit: 10000000,
-            gasPrice: gasp.add(gasp.div(5)),
-          }
-        );
-        let receipt = await tx.wait();
-        let transactionHash = receipt.transactionHash;
-        // await sendTradeSuccessMessage(market, result, transactionHash);
-        console.log("Trade made");
-      } catch (e) {
-        let errorBody = JSON.parse(e.error.error.body);
-        console.log("Trade failed", errorBody);
-        await sendTradeErrorMessage(market.address, errorBody.error.message);
-      }
+      // try {
+      //   let tx = await VaultContract.trade(
+      //     market.address,
+      //     w3utils.toWei(result.amount.toString()),
+      //     result.position,
+      //     {
+      //       gasLimit: 10000000,
+      //       gasPrice: gasp.add(gasp.div(5)),
+      //     }
+      //   );
+      //   let receipt = await tx.wait();
+      //   let transactionHash = receipt.transactionHash;
+      //   // await sendTradeSuccessMessage(market, result, transactionHash);
+      //   console.log("Trade made");
+      // } catch (e) {
+      //   let errorBody = JSON.parse(e.error.error.body);
+      //   console.log("Trade failed", errorBody);
+      //   await sendTradeErrorMessage(market.address, errorBody.error.message);
+      // }
+      console.log(
+        `Trade made for ${market.address} with amount ${result.amount} and quote ${result.quote} and position ${result.position} `
+      );
     }
   }
 

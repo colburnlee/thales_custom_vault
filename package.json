@@ -9,7 +9,9 @@
   },
   "scripts": {
     "start": "node index.js",
+    "start_sport": "node index_sport.js",
     "dev": "nodemon index.js",
+    "dev_sport": "nodemon index_sport.js",
     "test": "jest --verbose",
     "results": "node source/createResults.js"
   },
