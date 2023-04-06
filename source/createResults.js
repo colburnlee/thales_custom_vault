@@ -302,6 +302,13 @@ const createSummary = async (roundData) => {
   return summary;
 };
 
+// Create a summary for each market. Need to think through how to get historical data for each market. Add network history of trades to each market, and outcome history with P&L.
+const createMarketSummary = async (roundData) => {
+  let pairSummary = {
+    currencyKey: "TBD",
+  };
+};
+
 const createOverallSummary = async (summaryData) => {
   let overallSummary = {
     total: {
