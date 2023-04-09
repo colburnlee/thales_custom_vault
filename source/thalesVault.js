@@ -18,7 +18,14 @@ const processVault = async (auth, networkId) => {
   // Get the current vault round information from Optimism
   const { round, roundEndTime, closingDate } = await setOptimismVariables();
   // ensure data.json is up to date
-  setLocalVariables(round);
+
+  if (round > data.round) {
+    // If the round is greater than the round in data.json, re-initialize data.json and return
+    console.log("New round. Re-initializing data.json");
+    setLocalVariables(round);
+    return;
+  }
+
   // Test trades for each market
   await evaluateMarkets(
     priceLowerLimit,

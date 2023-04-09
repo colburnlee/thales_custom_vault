@@ -28,10 +28,44 @@ const createResults = async (roundData) => {
     let marketResult = await contract.result();
     marketResult = marketResult > 0 ? "DOWN" : "UP";
     market.result = marketResult;
+
+    console.log(
+      `Market ${market.market} Position: ${market.position} Result: ${marketResult}...`
+    );
+    // Add the result to the allResults.fullHistory
+    let marketIndex = allResults.fullHistory.findIndex(
+      (m) => m.market === market.market
+    );
+    if (marketIndex > -1) {
+      allResults.fullHistory[marketIndex].result = marketResult;
+    } else {
+      allResults.fullHistory.push(market);
+    }
   }
+  checkResults(allResults.fullHistory);
 
   // Return the roundData with results
   return roundDataWithResults;
+};
+
+const checkResults = async (fullHistory) => {
+  // Loop through each market in the tradeLog and check for duplicate hashes. Remove duplicates.
+  for (let i = 0; i < fullHistory.length; i++) {
+    let market = fullHistory[i];
+    let duplicates = fullHistory.filter(
+      (m) => m.transactionHash === market.transactionHash
+    );
+    if (duplicates.length > 1) {
+      console.log(`Duplicate hash found: ${market.transactionHash}`);
+      let marketIndex = fullHistory.findIndex(
+        (m) => m.transactionHash === market.transactionHash
+      );
+      fullHistory.splice(marketIndex, 1);
+    }
+  }
+  console.log(`Full history length: ${fullHistory.length}`);
+  allResults.fullHistory = fullHistory;
+  return fullHistory;
 };
 
 const getNetworkVariables = async (network) => {
@@ -93,8 +127,14 @@ const getNetworkVariables = async (network) => {
 };
 
 const createSummary = async (roundData) => {
+  let round;
+  try {
+    round = +roundData.tradeLog[0].round;
+  } catch (error) {
+    round = 0;
+  }
   let summary = {
-    round: +roundData.tradeLog[0].round,
+    round: round,
     optimism: {
       trades: 0,
       wins: 0,
@@ -303,10 +343,33 @@ const createSummary = async (roundData) => {
 };
 
 // Create a summary for each market. Need to think through how to get historical data for each market. Add network history of trades to each market, and outcome history with P&L.
-const createMarketSummary = async (roundData) => {
-  let pairSummary = {
-    currencyKey: "TBD",
-  };
+const createMarketSummary = async (allResults) => {
+  let history = allResults.fullHistory;
+  // loop through each market. Evaluate each trade by currencyKey to determine summary results for total, optimism, arbitrum, bsc, and polygon.
+  let marketSummary = {};
+  for (let i = 0; i < history.length; i++) {
+    let market = history[i];
+    let marketName = market.currencyKey;
+    // if market is not in marketSummary, add it
+    if (!marketSummary[marketName]) {
+      marketSummary[marketName] = {
+        tradeLog: [],
+      };
+    }
+    // add data to tradeLog
+    marketSummary[marketName].tradeLog.push(market);
+  }
+  // console.log("Market Summary", marketSummary);
+
+  // loop through each market and create summary data
+  for (let market in marketSummary) {
+    // console.log("Market", market);
+    // console.log("Market Summary", marketSummary[market]);
+    let summary = await createSummary(marketSummary[market]);
+    marketSummary[market].summary = summary;
+  }
+  // add to allResults
+  allResults.marketSummary = marketSummary;
 };
 
 const createOverallSummary = async (summaryData) => {
@@ -521,13 +584,14 @@ const createOverallSummary = async (summaryData) => {
 };
 
 const main = async () => {
-  const roundData = require("../data/archive/round_19.json");
+  const roundData = require("../data/archive/round_20.json");
   try {
     let roundDataWithResults = await createResults(roundData);
     let summary = await createSummary(roundDataWithResults);
     allResults.roundResults.push(summary);
     let overallSummary = await createOverallSummary(allResults.roundResults);
     allResults.overallSummary = overallSummary;
+    await createMarketSummary(allResults);
     fs.writeFileSync(
       "./data/results.json",
       JSON.stringify(allResults, null, 2)
