@@ -19,7 +19,7 @@ const processVault = async (auth, networkId) => {
   const { round, roundEndTime, closingDate } = await setOptimismVariables();
   // ensure data.json is up to date
 
-  if (round > data.round) {
+  if (round > data.latestRound) {
     // If the round is greater than the round in data.json, re-initialize data.json and return
     console.log("New round. Re-initializing data.json");
     setLocalVariables(round);

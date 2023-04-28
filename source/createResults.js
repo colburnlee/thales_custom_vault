@@ -342,7 +342,6 @@ const createSummary = async (roundData) => {
   return summary;
 };
 
-// Create a summary for each market. Need to think through how to get historical data for each market. Add network history of trades to each market, and outcome history with P&L.
 const createMarketSummary = async (allResults) => {
   let history = allResults.fullHistory;
   // loop through each market. Evaluate each trade by currencyKey to determine summary results for total, optimism, arbitrum, bsc, and polygon.
@@ -584,7 +583,7 @@ const createOverallSummary = async (summaryData) => {
 };
 
 const main = async () => {
-  const roundData = require("../data/archive/round_20.json");
+  const roundData = require("../data/archive/round_22.json");
   try {
     let roundDataWithResults = await createResults(roundData);
     let summary = await createSummary(roundDataWithResults);
