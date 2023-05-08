@@ -437,10 +437,11 @@ async function amountToBuy(
       } Skew Impact Limit: ${skewImpactLimit}`
     );
     if (skewImpact <= skewImpactLimit) break;
-    amount =
-      Math.floor(amount * 0.95) < minTradeAmount
-        ? minTradeAmount
-        : Math.floor(amount * 0.95);
+    amount = Math.floor(amount * 0.95);
+    if (amount <= minTradeAmount) {
+      console.log(`Amount to buy is too small.`);
+      return { amount: 0, quote: 0, position: market.position };
+    }
   }
 
   // Get the quote for the amount of tokens to buy. If the quote is over the max allocation, then reduce the amount to buy
@@ -465,10 +466,11 @@ async function amountToBuy(
         amount * 0.99
       )}`
     );
-    amount =
-      Math.floor(amount * 0.99) < minTradeAmount
-        ? minTradeAmount
-        : Math.floor(amount * 0.99);
+    amount = Math.floor(amount * 0.99);
+    if (amount <= minTradeAmount) {
+      console.log(`Amount to buy is too small.`);
+      return { amount: 0, quote: 0, position: market.position };
+    }
     quote =
       (await contract.buyFromAmmQuote(
         market.address,

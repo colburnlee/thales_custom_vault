@@ -7,20 +7,20 @@ const privateKey = process.env.PRIVATE_KEY;
 //   process.env.ALCHEMY
 // );
 
-let etherprovider = new ethers.providers.JsonRpcProvider(
-  "https://rpc.ankr.com/optimism"
-);
+// let etherprovider = new ethers.providers.JsonRpcProvider(
+//   "https://rpc.ankr.com/optimism"
+// );
 
 // let etherprovider = new ethers.providers.JsonRpcProvider("https://1rpc.io/op"); //https://endpoints.omniatech.io/v1/op/mainnet/public
 
-// let etherprovider = new ethers.providers.JsonRpcProvider(process.env.OMNIA_URL);
-// let arbitrumProvider = new ethers.providers.JsonRpcProvider(
-//   process.env.ARBITRUM_OMNIA_URL
-// );
-
+let etherprovider = new ethers.providers.JsonRpcProvider(process.env.OMNIA_URL);
 let arbitrumProvider = new ethers.providers.JsonRpcProvider(
-  process.env.ARBITRUM_1RPC_URL
+  process.env.ARBITRUM_OMNIA_URL
 );
+
+// let arbitrumProvider = new ethers.providers.JsonRpcProvider(
+//   process.env.ARBITRUM_1RPC_URL
+// );
 
 let bscProvider = new ethers.providers.JsonRpcProvider(
   process.env.BSC_1RPC_URL

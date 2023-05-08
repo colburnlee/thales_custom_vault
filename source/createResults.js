@@ -442,20 +442,24 @@ const createOverallSummary = async (summaryData) => {
     overallSummary.total.invested += summary.total.invested;
 
     // Optimism
-    overallSummary.optimism.trades += summary.optimism.trades;
-    overallSummary.optimism.wins += summary.optimism.wins;
-    overallSummary.optimism.losses += summary.optimism.losses;
-    overallSummary.optimism.amountWon += summary.optimism.amountWon;
-    overallSummary.optimism.amountLost += summary.optimism.amountLost;
-    overallSummary.optimism.invested += summary.optimism.invested;
+    if (summary.optimism && summary.optimism.trades > 0) {
+      overallSummary.optimism.trades += summary.optimism.trades;
+      overallSummary.optimism.wins += summary.optimism.wins;
+      overallSummary.optimism.losses += summary.optimism.losses;
+      overallSummary.optimism.amountWon += summary.optimism.amountWon;
+      overallSummary.optimism.amountLost += summary.optimism.amountLost;
+      overallSummary.optimism.invested += summary.optimism.invested;
+    }
 
     // Arbitrum
-    overallSummary.arbitrum.trades += summary.arbitrum.trades;
-    overallSummary.arbitrum.wins += summary.arbitrum.wins;
-    overallSummary.arbitrum.losses += summary.arbitrum.losses;
-    overallSummary.arbitrum.amountWon += summary.arbitrum.amountWon;
-    overallSummary.arbitrum.amountLost += summary.arbitrum.amountLost;
-    overallSummary.arbitrum.invested += summary.arbitrum.invested;
+    if (summary.arbitrum && summary.arbitrum.trades > 0) {
+      overallSummary.arbitrum.trades += summary.arbitrum.trades;
+      overallSummary.arbitrum.wins += summary.arbitrum.wins;
+      overallSummary.arbitrum.losses += summary.arbitrum.losses;
+      overallSummary.arbitrum.amountWon += summary.arbitrum.amountWon;
+      overallSummary.arbitrum.amountLost += summary.arbitrum.amountLost;
+      overallSummary.arbitrum.invested += summary.arbitrum.invested;
+    }
 
     if (summary.bsc && summary.bsc.trades > 0) {
       // BSC
@@ -499,44 +503,48 @@ const createOverallSummary = async (summaryData) => {
   );
 
   // Optimism
-  overallSummary.optimism.winPercent =
-    (overallSummary.optimism.wins / overallSummary.optimism.trades) * 100;
-  overallSummary.optimism.lossPercent =
-    (overallSummary.optimism.losses / overallSummary.optimism.trades) * 100;
-  overallSummary.optimism.amountWon = Number(
-    overallSummary.optimism.amountWon.toFixed(2)
-  );
-  overallSummary.optimism.amountLost = Number(
-    overallSummary.optimism.amountLost.toFixed(2)
-  );
-  overallSummary.optimism.invested = Number(
-    overallSummary.optimism.invested.toFixed(2)
-  );
-  overallSummary.optimism.profit = Number(
-    (
-      overallSummary.optimism.amountWon - overallSummary.optimism.amountLost
-    ).toFixed(2)
-  );
+  if (overallSummary.optimism.trades > 0) {
+    overallSummary.optimism.winPercent =
+      (overallSummary.optimism.wins / overallSummary.optimism.trades) * 100;
+    overallSummary.optimism.lossPercent =
+      (overallSummary.optimism.losses / overallSummary.optimism.trades) * 100;
+    overallSummary.optimism.amountWon = Number(
+      overallSummary.optimism.amountWon.toFixed(2)
+    );
+    overallSummary.optimism.amountLost = Number(
+      overallSummary.optimism.amountLost.toFixed(2)
+    );
+    overallSummary.optimism.invested = Number(
+      overallSummary.optimism.invested.toFixed(2)
+    );
+    overallSummary.optimism.profit = Number(
+      (
+        overallSummary.optimism.amountWon - overallSummary.optimism.amountLost
+      ).toFixed(2)
+    );
+  }
 
   // Arbitrum
-  overallSummary.arbitrum.winPercent =
-    (overallSummary.arbitrum.wins / overallSummary.arbitrum.trades) * 100;
-  overallSummary.arbitrum.lossPercent =
-    (overallSummary.arbitrum.losses / overallSummary.arbitrum.trades) * 100;
-  overallSummary.arbitrum.amountWon = Number(
-    overallSummary.arbitrum.amountWon.toFixed(2)
-  );
-  overallSummary.arbitrum.amountLost = Number(
-    overallSummary.arbitrum.amountLost.toFixed(2)
-  );
-  overallSummary.arbitrum.invested = Number(
-    overallSummary.arbitrum.invested.toFixed(2)
-  );
-  overallSummary.arbitrum.profit = Number(
-    (
-      overallSummary.arbitrum.amountWon - overallSummary.arbitrum.amountLost
-    ).toFixed(2)
-  );
+  if (overallSummary.arbitrum.trades > 0) {
+    overallSummary.arbitrum.winPercent =
+      (overallSummary.arbitrum.wins / overallSummary.arbitrum.trades) * 100;
+    overallSummary.arbitrum.lossPercent =
+      (overallSummary.arbitrum.losses / overallSummary.arbitrum.trades) * 100;
+    overallSummary.arbitrum.amountWon = Number(
+      overallSummary.arbitrum.amountWon.toFixed(2)
+    );
+    overallSummary.arbitrum.amountLost = Number(
+      overallSummary.arbitrum.amountLost.toFixed(2)
+    );
+    overallSummary.arbitrum.invested = Number(
+      overallSummary.arbitrum.invested.toFixed(2)
+    );
+    overallSummary.arbitrum.profit = Number(
+      (
+        overallSummary.arbitrum.amountWon - overallSummary.arbitrum.amountLost
+      ).toFixed(2)
+    );
+  }
 
   if (overallSummary.bsc && overallSummary.bsc.trades > 0) {
     // BSC
@@ -583,7 +591,7 @@ const createOverallSummary = async (summaryData) => {
 };
 
 const main = async () => {
-  const roundData = require("../data/archive/round_22.json");
+  const roundData = require("../data/archive/round_24.json");
   try {
     let roundDataWithResults = await createResults(roundData);
     let summary = await createSummary(roundDataWithResults);
